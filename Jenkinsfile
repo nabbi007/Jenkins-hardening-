@@ -28,7 +28,7 @@ pipeline {
     string(name: 'BACKEND_LOG_GROUP', defaultValue: '/ecs/voting-app/backend', description: 'CloudWatch log group for backend container')
     string(name: 'FRONTEND_LOG_GROUP', defaultValue: '/ecs/voting-app/frontend', description: 'CloudWatch log group for frontend container')
 
-    string(name: 'SONAR_HOST_URL', defaultValue: 'http://localhost:9000', description: 'SonarQube server URL')
+    string(name: 'SONAR_HOST_URL', defaultValue: 'http://54.194.104.90:9000', description: 'SonarQube server URL')
 
     booleanParam(name: 'ENABLE_SONARQUBE', defaultValue: true, description: 'Run SonarQube SAST + quality gate')
     booleanParam(name: 'ENABLE_OWASP_DC', defaultValue: true, description: 'Run OWASP Dependency-Check (SCA)')
@@ -123,6 +123,7 @@ pipeline {
           sh '''
             set -euo pipefail
             docker run --rm \
+              --network host \
               -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
               -e SONAR_TOKEN="${SONAR_TOKEN}" \
               -v "$PWD:/usr/src" \
