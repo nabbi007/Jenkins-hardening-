@@ -1,0 +1,9 @@
+workflow-aggregator
+git
+credentials-binding
+docker-workflow
+ssh-agent
+branch-api
+github-branch-source
+pipeline-stage-view
+sonar

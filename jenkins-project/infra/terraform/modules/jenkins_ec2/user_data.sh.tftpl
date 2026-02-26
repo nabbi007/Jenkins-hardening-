@@ -1,0 +1,71 @@
+#!/bin/bash
+set -euxo pipefail
+
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
+
+# Keep OS packages current.
+dnf update -y
+
+# Core tooling required by Jenkins pipeline.
+dnf install -y \
+  git \
+  jq \
+  unzip \
+  tar \
+  curl \
+  wget \
+  docker \
+  java-21-amazon-corretto-headless \
+  awscli
+
+# Install Node.js 20 for backend/frontend lint + tests.
+curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+dnf install -y nodejs
+
+# Install Terraform CLI (for infra operations from Jenkins if needed).
+dnf install -y dnf-plugins-core
+dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo
+dnf install -y terraform
+
+# Install Jenkins LTS.
+rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+cat > /etc/yum.repos.d/jenkins.repo <<JENKINS_REPO
+[jenkins]
+name=Jenkins-stable
+baseurl=https://pkg.jenkins.io/redhat-stable
+gpgcheck=1
+repo_gpgcheck=1
+enabled=1
+gpgkey=https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+JENKINS_REPO
+
+dnf install -y jenkins
+
+# Enable and start services.
+systemctl enable docker
+systemctl start docker
+
+usermod -aG docker jenkins || true
+usermod -aG docker ec2-user || true
+
+# Jenkins memory tuning for medium instances.
+mkdir -p /etc/systemd/system/jenkins.service.d
+cat > /etc/systemd/system/jenkins.service.d/override.conf <<JENKINS_OVERRIDE
+[Service]
+Environment="JENKINS_JAVA_OPTIONS=-Djava.awt.headless=true -Xms512m -Xmx1536m"
+JENKINS_OVERRIDE
+
+systemctl daemon-reload
+systemctl enable jenkins
+systemctl start jenkins
+
+# Basic filesystem permissions used by jobs and Docker-based scanners.
+mkdir -p /var/lib/jenkins/workspace
+chown -R jenkins:jenkins /var/lib/jenkins
+
+# Useful helper message.
+cat >/etc/motd <<MOTD
+Jenkins host ready.
+- Jenkins URL: http://<this-instance-public-ip>:8080
+- Initial admin password: sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+MOTD

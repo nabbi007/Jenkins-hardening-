@@ -1,0 +1,4 @@
+{
+  "note": "Pipeline-managed file. Jenkins overwrites this file with the latest rendered revision before registration.",
+  "generated_from": "ecs/taskdef.template.json"
+}

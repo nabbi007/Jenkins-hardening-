@@ -1,0 +1,51 @@
+aws_region              = "eu-west-1"
+project_name            = "voting-app"
+
+# Optional: set to your existing VPC/subnets. If unset, default VPC and all its subnets are used.
+# vpc_id                = "vpc-xxxxxxxx"
+# subnet_ids            = ["subnet-aaaa", "subnet-bbbb"]
+
+allowed_ingress_cidrs   = ["203.0.113.10/32"]
+ecs_public_ingress_ports = [80, 3000]
+
+backend_ecr_repo_name   = "backend-service"
+frontend_ecr_repo_name  = "frontend-web"
+ecr_lifecycle_keep_images = 30
+
+ecs_cluster_name        = "voting-cluster"
+ecs_service_name        = "voting-app"
+ecs_task_family         = "voting-app"
+
+desired_count           = 1
+assign_public_ip        = true
+
+task_cpu                = 512
+task_memory             = 1024
+
+backend_container_cpu   = 256
+backend_container_memory = 512
+frontend_container_cpu  = 256
+frontend_container_memory = 512
+
+backend_container_port  = 3000
+frontend_container_port = 80
+
+backend_log_group_name  = "/ecs/voting-app/backend"
+frontend_log_group_name = "/ecs/voting-app/frontend"
+
+# Initial deploy tag; Jenkins will later roll new revisions with branch-sha-build tags.
+backend_image_tag       = "latest"
+frontend_image_tag      = "latest"
+
+# Optional: route alarms to SNS.
+# alarm_sns_topic_arn   = "arn:aws:sns:eu-west-1:123456789012:ops-alerts"
+
+# Jenkins EC2 host
+create_jenkins_instance   = true
+# jenkins_subnet_id       = "subnet-cccc"
+jenkins_allowed_cidrs     = ["203.0.113.10/32"]
+jenkins_ingress_ports     = [22, 8080, 9000]
+jenkins_instance_type     = "t3.large"
+jenkins_root_volume_size  = 40
+# jenkins_key_name        = "my-ssh-keypair"
+jenkins_associate_public_ip = true

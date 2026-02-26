@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Voting Board</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+    <main class="card">
+      <header class="card-header">
+        <p class="eyebrow">Live Poll</p>
+        <h1>Team Voting Board</h1>
+        <p id="question">Loading poll question...</p>
+        <p id="status" role="status">Connecting...</p>
+      </header>
+
+      <section class="panel">
+        <h2>Cast Your Vote</h2>
+        <div id="options" class="option-grid"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Live Results</h2>
+        <ul id="results" class="results-list"></ul>
+      </section>
+
+      <footer class="actions">
+        <button id="refresh" type="button">Refresh Results</button>
+        <p id="last-updated">Last updated: never</p>
+      </footer>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
