@@ -17,6 +17,8 @@ locals {
   effective_subnet_ids            = length(var.subnet_ids) > 0 ? var.subnet_ids : data.aws_subnets.selected[0].ids
   effective_jenkins_subnet_id     = var.jenkins_subnet_id != null ? var.jenkins_subnet_id : local.effective_subnet_ids[0]
   effective_jenkins_allowed_cidrs = length(var.jenkins_allowed_cidrs) > 0 ? var.jenkins_allowed_cidrs : var.allowed_ingress_cidrs
+  effective_alb_certificate_arn   = trim(coalesce(var.alb_certificate_arn, ""))
+  enable_alb_https                = local.effective_alb_certificate_arn != ""
 
   repositories = [
     var.backend_ecr_repo_name,
@@ -46,6 +48,15 @@ module "ecs_fargate" {
   subnet_ids            = local.effective_subnet_ids
   allowed_ingress_cidrs = var.allowed_ingress_cidrs
   public_ingress_ports  = var.ecs_public_ingress_ports
+  enable_alb            = var.enable_ecs_alb
+  alb_subnet_ids        = var.alb_subnet_ids
+  alb_allowed_cidrs     = var.alb_allowed_cidrs
+  alb_internal          = var.alb_internal
+  alb_listener_port     = var.alb_listener_port
+  alb_health_check_path = var.alb_health_check_path
+  create_https_listener = local.enable_alb_https
+  alb_certificate_arn   = local.enable_alb_https ? local.effective_alb_certificate_arn : null
+  alb_ssl_policy        = var.alb_ssl_policy
 
   task_cpu                  = var.task_cpu
   task_memory               = var.task_memory

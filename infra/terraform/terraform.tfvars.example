@@ -6,7 +6,17 @@ project_name            = "voting-app"
 # subnet_ids            = ["subnet-aaaa", "subnet-bbbb"]
 
 allowed_ingress_cidrs   = ["203.0.113.10/32"]
-ecs_public_ingress_ports = [80, 3000]
+ecs_public_ingress_ports = []
+
+enable_ecs_alb          = true
+alb_subnet_ids          = []
+alb_allowed_cidrs       = ["203.0.113.10/32"]
+alb_internal            = false
+alb_listener_port       = 80
+alb_health_check_path   = "/nginx-health"
+# Optional: set ACM cert ARN to auto-enable HTTPS listener
+# alb_certificate_arn   = "arn:aws:acm:eu-west-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# alb_ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 
 backend_ecr_repo_name   = "backend-service"
 frontend_ecr_repo_name  = "frontend-web"

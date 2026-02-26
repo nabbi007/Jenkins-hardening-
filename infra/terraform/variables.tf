@@ -23,15 +23,63 @@ variable "subnet_ids" {
 }
 
 variable "allowed_ingress_cidrs" {
-  description = "CIDRs allowed to reach frontend service port"
+  description = "CIDRs used for direct ECS task ingress when ALB is disabled"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
 
 variable "ecs_public_ingress_ports" {
-  description = "Ports exposed publicly on the ECS service security group"
+  description = "Direct ECS task ingress ports used only when ALB is disabled"
   type        = list(number)
   default     = [80, 3000]
+}
+
+variable "enable_ecs_alb" {
+  description = "Attach ECS service to an Application Load Balancer"
+  type        = bool
+  default     = true
+}
+
+variable "alb_subnet_ids" {
+  description = "Subnet IDs for ALB. If empty, ECS service subnets are used"
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_allowed_cidrs" {
+  description = "CIDRs allowed to reach ALB listeners"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "alb_internal" {
+  description = "Whether ALB is internal"
+  type        = bool
+  default     = false
+}
+
+variable "alb_listener_port" {
+  description = "HTTP listener port for ALB"
+  type        = number
+  default     = 80
+}
+
+variable "alb_health_check_path" {
+  description = "ALB target group health check path"
+  type        = string
+  default     = "/nginx-health"
+}
+
+variable "alb_certificate_arn" {
+  description = "Optional ACM certificate ARN. If provided, HTTPS listener is enabled automatically"
+  type        = string
+  default     = null
+}
+
+variable "alb_ssl_policy" {
+  description = "SSL policy used when HTTPS listener is enabled"
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 }
 
 variable "backend_ecr_repo_name" {

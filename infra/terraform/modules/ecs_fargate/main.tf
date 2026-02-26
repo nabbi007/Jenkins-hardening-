@@ -75,6 +75,47 @@ resource "aws_security_group" "ecs_service" {
   }
 }
 
+resource "aws_security_group" "alb" {
+  count = var.enable_alb ? 1 : 0
+
+  name        = "${var.project_name}-alb-sg"
+  description = "Security group for Application Load Balancer"
+  vpc_id      = var.vpc_id
+
+  tags = {
+    Name    = "${var.project_name}-alb-sg"
+    Project = var.project_name
+  }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_http_ingress" {
+  for_each = var.enable_alb ? toset(var.alb_allowed_cidrs) : toset([])
+
+  security_group_id = aws_security_group.alb[0].id
+  cidr_ipv4         = each.value
+  from_port         = var.alb_listener_port
+  to_port           = var.alb_listener_port
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "alb_https_ingress" {
+  for_each = var.enable_alb && var.create_https_listener ? toset(var.alb_allowed_cidrs) : toset([])
+
+  security_group_id = aws_security_group.alb[0].id
+  cidr_ipv4         = each.value
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "alb_all_egress" {
+  count = var.enable_alb ? 1 : 0
+
+  security_group_id = aws_security_group.alb[0].id
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1"
+}
+
 resource "aws_vpc_security_group_egress_rule" "all_egress" {
   security_group_id = aws_security_group.ecs_service.id
   cidr_ipv4         = "0.0.0.0/0"
@@ -82,9 +123,10 @@ resource "aws_vpc_security_group_egress_rule" "all_egress" {
 }
 
 locals {
-  execution_role_arn = var.execution_role_arn != null ? var.execution_role_arn : aws_iam_role.execution[0].arn
-  task_role_arn      = var.task_role_arn != null ? var.task_role_arn : aws_iam_role.task[0].arn
-  ingress_rules = {
+  execution_role_arn       = var.execution_role_arn != null ? var.execution_role_arn : aws_iam_role.execution[0].arn
+  task_role_arn            = var.task_role_arn != null ? var.task_role_arn : aws_iam_role.task[0].arn
+  effective_alb_subnet_ids = length(var.alb_subnet_ids) > 0 ? var.alb_subnet_ids : var.subnet_ids
+  direct_ingress_rules = {
     for pair in setproduct(toset(var.allowed_ingress_cidrs), toset(var.public_ingress_ports)) :
     "${pair[0]}:${pair[1]}" => {
       cidr = pair[0]
@@ -166,14 +208,97 @@ locals {
   ]
 }
 
+resource "aws_lb" "this" {
+  count = var.enable_alb ? 1 : 0
+
+  name               = substr("${var.project_name}-${var.service_name}-alb", 0, 32)
+  internal           = var.alb_internal
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb[0].id]
+  subnets            = local.effective_alb_subnet_ids
+
+  tags = {
+    Project = var.project_name
+  }
+}
+
+resource "aws_lb_target_group" "frontend" {
+  count = var.enable_alb ? 1 : 0
+
+  name        = substr("${var.project_name}-${var.service_name}-tg", 0, 32)
+  port        = var.frontend_container_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    matcher             = "200-399"
+    path                = var.alb_health_check_path
+  }
+
+  tags = {
+    Project = var.project_name
+  }
+}
+
+resource "aws_lb_listener" "http" {
+  count = var.enable_alb ? 1 : 0
+
+  load_balancer_arn = aws_lb.this[0].arn
+  port              = var.alb_listener_port
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend[0].arn
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  count = var.enable_alb && var.create_https_listener ? 1 : 0
+
+  load_balancer_arn = aws_lb.this[0].arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = var.alb_ssl_policy
+  certificate_arn   = var.alb_certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.frontend[0].arn
+  }
+
+  lifecycle {
+    precondition {
+      condition     = var.alb_certificate_arn != null && trim(var.alb_certificate_arn) != ""
+      error_message = "alb_certificate_arn must be provided when create_https_listener is true."
+    }
+  }
+}
+
 resource "aws_vpc_security_group_ingress_rule" "public_ingress" {
-  for_each = local.ingress_rules
+  for_each = var.enable_alb ? {} : local.direct_ingress_rules
 
   security_group_id = aws_security_group.ecs_service.id
   cidr_ipv4         = each.value.cidr
   from_port         = each.value.port
   ip_protocol       = "tcp"
   to_port           = each.value.port
+}
+
+resource "aws_vpc_security_group_ingress_rule" "frontend_from_alb" {
+  count = var.enable_alb ? 1 : 0
+
+  security_group_id            = aws_security_group.ecs_service.id
+  referenced_security_group_id = aws_security_group.alb[0].id
+  from_port                    = var.frontend_container_port
+  to_port                      = var.frontend_container_port
+  ip_protocol                  = "tcp"
 }
 
 resource "aws_ecs_task_definition" "this" {
@@ -204,6 +329,15 @@ resource "aws_ecs_service" "this" {
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
 
+  dynamic "load_balancer" {
+    for_each = var.enable_alb ? [1] : []
+    content {
+      target_group_arn = aws_lb_target_group.frontend[0].arn
+      container_name   = var.frontend_container_name
+      container_port   = var.frontend_container_port
+    }
+  }
+
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = [aws_security_group.ecs_service.id]
@@ -216,6 +350,8 @@ resource "aws_ecs_service" "this" {
 
   depends_on = [
     aws_cloudwatch_log_group.backend,
-    aws_cloudwatch_log_group.frontend
+    aws_cloudwatch_log_group.frontend,
+    aws_lb_listener.http,
+    aws_lb_listener.https
   ]
 }

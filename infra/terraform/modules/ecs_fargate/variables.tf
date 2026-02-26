@@ -44,13 +44,62 @@ variable "subnet_ids" {
 }
 
 variable "allowed_ingress_cidrs" {
-  description = "CIDRs allowed to hit frontend container"
+  description = "CIDRs allowed to hit task ENIs directly when ALB is disabled"
   type        = list(string)
 }
 
 variable "public_ingress_ports" {
-  description = "Public ports opened on ECS service security group"
+  description = "Direct task ingress ports opened only when ALB is disabled"
   type        = list(number)
+}
+
+variable "enable_alb" {
+  description = "Attach ECS service to an Application Load Balancer"
+  type        = bool
+}
+
+variable "alb_subnet_ids" {
+  description = "Subnet IDs for the ALB. If empty, ECS service subnets are used"
+  type        = list(string)
+  default     = []
+}
+
+variable "alb_allowed_cidrs" {
+  description = "CIDRs allowed to access ALB listeners"
+  type        = list(string)
+}
+
+variable "alb_internal" {
+  description = "Whether ALB is internal"
+  type        = bool
+}
+
+variable "alb_listener_port" {
+  description = "HTTP listener port for ALB"
+  type        = number
+}
+
+variable "alb_health_check_path" {
+  description = "Health check path for ALB target group"
+  type        = string
+}
+
+variable "create_https_listener" {
+  description = "Create HTTPS listener on ALB port 443"
+  type        = bool
+  default     = false
+}
+
+variable "alb_certificate_arn" {
+  description = "ACM certificate ARN for HTTPS listener"
+  type        = string
+  default     = null
+}
+
+variable "alb_ssl_policy" {
+  description = "SSL policy for ALB HTTPS listener"
+  type        = string
+  default     = "ELBSecurityPolicy-TLS13-1-2-2021-06"
 }
 
 variable "task_cpu" {

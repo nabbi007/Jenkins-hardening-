@@ -47,3 +47,28 @@ output "frontend_log_group_name" {
   description = "Frontend log group"
   value       = aws_cloudwatch_log_group.frontend.name
 }
+
+output "alb_arn" {
+  description = "ALB ARN"
+  value       = var.enable_alb ? aws_lb.this[0].arn : null
+}
+
+output "alb_dns_name" {
+  description = "ALB DNS name"
+  value       = var.enable_alb ? aws_lb.this[0].dns_name : null
+}
+
+output "alb_zone_id" {
+  description = "ALB Route53 zone ID"
+  value       = var.enable_alb ? aws_lb.this[0].zone_id : null
+}
+
+output "alb_listener_http_arn" {
+  description = "HTTP listener ARN"
+  value       = var.enable_alb ? aws_lb_listener.http[0].arn : null
+}
+
+output "alb_listener_https_arn" {
+  description = "HTTPS listener ARN"
+  value       = var.enable_alb && var.create_https_listener ? aws_lb_listener.https[0].arn : null
+}

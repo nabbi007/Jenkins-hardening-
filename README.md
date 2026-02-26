@@ -249,10 +249,10 @@ export OBS_IP="<observability_public_ip>"
 export APP_PRIVATE_IP="<app_private_ip>"  # e.g. 172.31.3.138
 
 # Copy all scripts and dashboards to the obs instance
-scp -i "$SSH_KEY" -r scripts/ observability/ ec2-user@$OBS_IP:/tmp/jenkins-project/
+scp -i "$SSH_KEY" -r scripts/ observability/ ec2-user@$OBS_IP:/tmp/jenkins-hardening/
 
 # SSH in and run the full observability setup
-ssh -i "$SSH_KEY" ec2-user@$OBS_IP "bash /tmp/jenkins-project/scripts/deploy_observability.sh $APP_PRIVATE_IP"
+ssh -i "$SSH_KEY" ec2-user@$OBS_IP "bash /tmp/jenkins-hardening/scripts/deploy_observability.sh $APP_PRIVATE_IP"
 ```
 
 This single command installs Prometheus (systemd), Grafana (systemd), Node Exporter,
@@ -262,10 +262,10 @@ To set up Prometheus or Grafana individually:
 
 ```bash
 # Prometheus only
-ssh -i "$SSH_KEY" ec2-user@$OBS_IP "bash /tmp/jenkins-project/scripts/setup_prometheus_systemd.sh $APP_PRIVATE_IP"
+ssh -i "$SSH_KEY" ec2-user@$OBS_IP "bash /tmp/jenkins-hardening/scripts/setup_prometheus_systemd.sh $APP_PRIVATE_IP"
 
 # Grafana only
-ssh -i "$SSH_KEY" ec2-user@$OBS_IP "bash /tmp/jenkins-project/scripts/setup_grafana_systemd.sh admin"
+ssh -i "$SSH_KEY" ec2-user@$OBS_IP "bash /tmp/jenkins-hardening/scripts/setup_grafana_systemd.sh admin"
 ```
 
 After a fresh Grafana install or dashboard wipe, re-import dashboards:

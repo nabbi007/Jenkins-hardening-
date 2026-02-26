@@ -34,7 +34,8 @@ This repo now includes a hardened Jenkins pipeline and Terraform modules to depl
   - Node.js 20 + npm (for backend/frontend lint/test stages)
   - AWS CLI, Terraform, git, jq, curl, unzip
 - Opens Jenkins host ports from `jenkins_ingress_ports` (default: `22`, `8080`, `9000`) to `jenkins_allowed_cidrs`.
-- ECS service public ports are controlled by `ecs_public_ingress_ports` (default: `80`, `3000`).
+- ECS app access is through ALB by default (`enable_ecs_alb = true`), with allowed CIDRs controlled by `alb_allowed_cidrs`.
+- Direct task public ports are controlled by `ecs_public_ingress_ports` and can remain empty when ALB is enabled.
 - Creates EC2 IAM instance profile with ECR push + ECS deploy permissions used by this pipeline.
 
 ## What else you need
@@ -75,6 +76,10 @@ Use outputs in Jenkins parameters:
 Jenkins access outputs:
 - `jenkins_public_ip`
 - `jenkins_public_dns`
+
+Application access outputs:
+- `alb_dns_name`
+- `app_url`
 
 After apply, get Jenkins initial admin password:
 
