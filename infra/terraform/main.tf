@@ -13,12 +13,16 @@ data "aws_subnets" "selected" {
 }
 
 locals {
-  effective_vpc_id                = var.vpc_id != null ? var.vpc_id : data.aws_vpc.default[0].id
-  effective_subnet_ids            = length(var.subnet_ids) > 0 ? var.subnet_ids : data.aws_subnets.selected[0].ids
-  effective_jenkins_subnet_id     = var.jenkins_subnet_id != null ? var.jenkins_subnet_id : local.effective_subnet_ids[0]
-  effective_jenkins_allowed_cidrs = length(var.jenkins_allowed_cidrs) > 0 ? var.jenkins_allowed_cidrs : var.allowed_ingress_cidrs
-  effective_alb_certificate_arn   = trim(coalesce(var.alb_certificate_arn, ""))
-  enable_alb_https                = local.effective_alb_certificate_arn != ""
+  effective_vpc_id                  = var.vpc_id != null ? var.vpc_id : data.aws_vpc.default[0].id
+  effective_subnet_ids              = length(var.subnet_ids) > 0 ? var.subnet_ids : data.aws_subnets.selected[0].ids
+  effective_jenkins_subnet_id       = var.jenkins_subnet_id != null ? var.jenkins_subnet_id : local.effective_subnet_ids[0]
+  effective_jenkins_allowed_cidrs   = length(var.jenkins_allowed_cidrs) > 0 ? var.jenkins_allowed_cidrs : var.allowed_ingress_cidrs
+  effective_alb_certificate_arn     = trimspace(var.alb_certificate_arn != null ? var.alb_certificate_arn : "")
+  enable_alb_https                  = local.effective_alb_certificate_arn != ""
+  effective_jenkins_key_name        = var.jenkins_key_name != null && trimspace(var.jenkins_key_name) != "" ? trimspace(var.jenkins_key_name) : null
+  effective_jenkins_public_key_path = var.jenkins_public_key_path != null ? trimspace(var.jenkins_public_key_path) : ""
+  effective_jenkins_key_pair_name   = var.jenkins_key_pair_name != null && trimspace(var.jenkins_key_pair_name) != "" ? trimspace(var.jenkins_key_pair_name) : "${var.project_name}-jenkins-key"
+  create_jenkins_key_pair           = var.create_jenkins_instance && local.effective_jenkins_key_name == null && local.effective_jenkins_public_key_path != ""
 
   repositories = [
     var.backend_ecr_repo_name,
@@ -26,11 +30,24 @@ locals {
   ]
 }
 
+resource "aws_key_pair" "jenkins" {
+  count = local.create_jenkins_key_pair ? 1 : 0
+
+  key_name   = local.effective_jenkins_key_pair_name
+  public_key = file(local.effective_jenkins_public_key_path)
+
+  tags = {
+    Project = var.project_name
+    Role    = "jenkins"
+  }
+}
+
 module "ecr" {
   source = "./modules/ecr"
 
   project_name          = var.project_name
   repositories          = local.repositories
+  create_repositories   = var.ecr_create_repositories
   lifecycle_keep_images = var.ecr_lifecycle_keep_images
 }
 
@@ -100,7 +117,7 @@ module "jenkins_ec2" {
   subnet_id                   = local.effective_jenkins_subnet_id
   instance_type               = var.jenkins_instance_type
   root_volume_size            = var.jenkins_root_volume_size
-  key_name                    = var.jenkins_key_name
+  key_name                    = local.effective_jenkins_key_name != null ? local.effective_jenkins_key_name : (local.create_jenkins_key_pair ? aws_key_pair.jenkins[0].key_name : null)
   allowed_cidrs               = local.effective_jenkins_allowed_cidrs
   ingress_ports               = var.jenkins_ingress_ports
   associate_public_ip_address = var.jenkins_associate_public_ip

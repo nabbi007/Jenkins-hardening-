@@ -1,5 +1,9 @@
+locals {
+  repository_set = toset(var.repositories)
+}
+
 resource "aws_ecr_repository" "this" {
-  for_each = toset(var.repositories)
+  for_each = var.create_repositories ? local.repository_set : toset([])
 
   name                 = each.value
   image_tag_mutability = var.image_tag_mutability
@@ -17,10 +21,16 @@ resource "aws_ecr_repository" "this" {
   }
 }
 
-resource "aws_ecr_lifecycle_policy" "this" {
-  for_each = aws_ecr_repository.this
+data "aws_ecr_repository" "existing" {
+  for_each = var.create_repositories ? toset([]) : local.repository_set
 
-  repository = each.value.name
+  name = each.value
+}
+
+resource "aws_ecr_lifecycle_policy" "this" {
+  for_each = local.repository_set
+
+  repository = each.value
   policy = jsonencode({
     rules = [
       {
@@ -37,4 +47,6 @@ resource "aws_ecr_lifecycle_policy" "this" {
       }
     ]
   })
+
+  depends_on = [aws_ecr_repository.this]
 }

@@ -20,6 +20,7 @@ alb_health_check_path   = "/nginx-health"
 
 backend_ecr_repo_name   = "backend-service"
 frontend_ecr_repo_name  = "frontend-web"
+ecr_create_repositories = false
 ecr_lifecycle_keep_images = 30
 
 ecs_cluster_name        = "voting-cluster"
@@ -55,7 +56,13 @@ create_jenkins_instance   = true
 # jenkins_subnet_id       = "subnet-cccc"
 jenkins_allowed_cidrs     = ["203.0.113.10/32"]
 jenkins_ingress_ports     = [22, 8080, 9000]
-jenkins_instance_type     = "t3.large"
+jenkins_instance_type     = "t3.medium"
 jenkins_root_volume_size  = 40
+# Option A: use existing EC2 key pair name
 # jenkins_key_name        = "my-ssh-keypair"
+# Option B: import local public key as EC2 key pair (when jenkins_key_name is not set)
+# jenkins_public_key_path = "/home/your-user/.ssh/jenkins-hardening.pub"
+# jenkins_key_pair_name   = "voting-app-jenkins-key"
+# Optional: used only in output jenkins_ssh_command
+# jenkins_private_key_path = "/home/your-user/.ssh/jenkins-hardening"
 jenkins_associate_public_ip = true

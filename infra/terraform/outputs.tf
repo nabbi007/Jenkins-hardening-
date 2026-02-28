@@ -45,7 +45,7 @@ output "alb_zone_id" {
 
 output "app_url" {
   description = "Application URL for ALB entrypoint (HTTPS when certificate is configured, otherwise HTTP)"
-  value       = module.ecs_fargate.alb_dns_name != null ? format("%s://%s", trim(coalesce(var.alb_certificate_arn, "")) != "" ? "https" : "http", module.ecs_fargate.alb_dns_name) : null
+  value       = module.ecs_fargate.alb_dns_name != null ? format("%s://%s", trimspace(var.alb_certificate_arn != null ? var.alb_certificate_arn : "") != "" ? "https" : "http", module.ecs_fargate.alb_dns_name) : null
 }
 
 output "jenkins_instance_id" {
@@ -66,4 +66,23 @@ output "jenkins_public_dns" {
 output "jenkins_security_group_id" {
   description = "Security group ID for Jenkins instance"
   value       = var.create_jenkins_instance ? module.jenkins_ec2[0].security_group_id : null
+}
+
+output "jenkins_effective_key_name" {
+  description = "Key pair name attached to Jenkins instance"
+  value       = var.create_jenkins_instance ? (var.jenkins_key_name != null && trimspace(var.jenkins_key_name) != "" ? trimspace(var.jenkins_key_name) : (length(aws_key_pair.jenkins) > 0 ? aws_key_pair.jenkins[0].key_name : null)) : null
+}
+
+output "jenkins_ssh_command" {
+  description = "SSH command to verify Jenkins host access"
+  value       = var.create_jenkins_instance && module.jenkins_ec2[0].public_ip != null ? format("ssh -i %s ec2-user@%s", var.jenkins_private_key_path != null && trimspace(var.jenkins_private_key_path) != "" ? trimspace(var.jenkins_private_key_path) : "<path-to-private-key>", module.jenkins_ec2[0].public_ip) : null
+}
+
+output "jenkins_health_check_command" {
+  description = "SSH command to validate core Jenkins host services and tooling"
+  value = var.create_jenkins_instance && module.jenkins_ec2[0].public_ip != null ? format(
+    "ssh -i %s ec2-user@%s \"sudo cloud-init status --wait; sudo systemctl is-active jenkins docker; docker --version; node --version; java -version; aws --version; terraform version; trivy --version; docker ps --format '{{.Names}}' | grep -x sonarqube\"",
+    var.jenkins_private_key_path != null && trimspace(var.jenkins_private_key_path) != "" ? trimspace(var.jenkins_private_key_path) : "<path-to-private-key>",
+    module.jenkins_ec2[0].public_ip
+  ) : null
 }

@@ -3,6 +3,11 @@ set -euxo pipefail
 
 exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
 
+TRIVY_VERSION="0.58.1"
+SONARQUBE_VERSION="lts-community"
+SONARQUBE_PORT="9000"
+MIN_SONAR_MEM_KIB="3500000"
+
 # Keep OS packages current.
 dnf update -y
 
@@ -28,17 +33,21 @@ dnf config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/has
 dnf install -y terraform
 
 # Install Jenkins LTS.
-rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2026.key
+rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key || true
 cat > /etc/yum.repos.d/jenkins.repo <<JENKINS_REPO
 [jenkins]
 name=Jenkins-stable
-baseurl=https://pkg.jenkins.io/redhat-stable
+baseurl=https://pkg.jenkins.io/rpm-stable
 gpgcheck=1
-repo_gpgcheck=1
+repo_gpgcheck=0
 enabled=1
-gpgkey=https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+gpgkey=https://pkg.jenkins.io/rpm-stable/jenkins.io-2026.key https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
 JENKINS_REPO
 
+dnf clean all
+rm -rf /var/cache/dnf
+dnf makecache --refresh || true
 dnf install -y jenkins
 
 # Enable and start services.
@@ -48,11 +57,61 @@ systemctl start docker
 usermod -aG docker jenkins || true
 usermod -aG docker ec2-user || true
 
-# Jenkins memory tuning for medium instances.
+# Install Trivy scanner.
+cat > /etc/yum.repos.d/trivy.repo <<'TRIVY_REPO'
+[trivy]
+name=Trivy repository
+baseurl=https://aquasecurity.github.io/trivy-repo/rpm/releases/$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://aquasecurity.github.io/trivy-repo/rpm/public.key
+TRIVY_REPO
+rpm --import https://aquasecurity.github.io/trivy-repo/rpm/public.key
+if ! dnf install -y trivy; then
+  machine="$(uname -m)"
+  if [[ "$${machine}" == "x86_64" ]]; then
+    trivy_file="trivy_$${TRIVY_VERSION}_Linux-64bit.tar.gz"
+  elif [[ "$${machine}" == "aarch64" ]]; then
+    trivy_file="trivy_$${TRIVY_VERSION}_Linux-ARM64.tar.gz"
+  else
+    echo "Unsupported architecture for Trivy install: $${machine}" >&2
+    exit 1
+  fi
+
+  trivy_url="https://github.com/aquasecurity/trivy/releases/download/v$${TRIVY_VERSION}/$${trivy_file}"
+  curl -fsSL "$${trivy_url}" -o "/tmp/$${trivy_file}"
+  tar -xzf "/tmp/$${trivy_file}" -C /tmp trivy
+  install -m 0755 /tmp/trivy /usr/local/bin/trivy
+  rm -f "/tmp/$${trivy_file}" /tmp/trivy
+fi
+
+# Install SonarQube in Docker when enough memory is available.
+mem_kib="$(awk '/MemTotal/ {print $2}' /proc/meminfo)"
+if (( mem_kib >= MIN_SONAR_MEM_KIB )); then
+  mkdir -p /opt/sonarqube/{data,extensions,logs}
+  chown -R 1000:1000 /opt/sonarqube || true
+  docker rm -f sonarqube >/dev/null 2>&1 || true
+  docker run -d \
+    --name sonarqube \
+    --restart unless-stopped \
+    -p "$${SONARQUBE_PORT}:9000" \
+    -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+    -e SONAR_WEB_JAVAOPTS="-Xms256m -Xmx512m" \
+    -e SONAR_CE_JAVAOPTS="-Xms256m -Xmx512m" \
+    -e SONAR_SEARCH_JAVAOPTS="-Xms256m -Xmx256m" \
+    -v /opt/sonarqube/data:/opt/sonarqube/data \
+    -v /opt/sonarqube/extensions:/opt/sonarqube/extensions \
+    -v /opt/sonarqube/logs:/opt/sonarqube/logs \
+    "sonarqube:$${SONARQUBE_VERSION}"
+else
+  echo "Skipping SonarQube install due to low memory: $${mem_kib} KiB"
+fi
+
+# Jenkins memory tuning for small instances.
 mkdir -p /etc/systemd/system/jenkins.service.d
 cat > /etc/systemd/system/jenkins.service.d/override.conf <<JENKINS_OVERRIDE
 [Service]
-Environment="JENKINS_JAVA_OPTIONS=-Djava.awt.headless=true -Xms512m -Xmx1536m"
+Environment="JENKINS_JAVA_OPTIONS=-Djava.awt.headless=true -Xms256m -Xmx512m"
 JENKINS_OVERRIDE
 
 systemctl daemon-reload
@@ -67,5 +126,6 @@ chown -R jenkins:jenkins /var/lib/jenkins
 cat >/etc/motd <<MOTD
 Jenkins host ready.
 - Jenkins URL: http://<this-instance-public-ip>:8080
+- SonarQube URL: http://<this-instance-public-ip>:$${SONARQUBE_PORT}
 - Initial admin password: sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 MOTD

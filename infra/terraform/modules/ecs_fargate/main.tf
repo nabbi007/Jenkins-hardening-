@@ -275,7 +275,7 @@ resource "aws_lb_listener" "https" {
 
   lifecycle {
     precondition {
-      condition     = var.alb_certificate_arn != null && trim(var.alb_certificate_arn) != ""
+      condition     = var.alb_certificate_arn != null && trimspace(var.alb_certificate_arn) != ""
       error_message = "alb_certificate_arn must be provided when create_https_listener is true."
     }
   }

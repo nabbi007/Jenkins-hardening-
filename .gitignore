@@ -8,6 +8,7 @@ override.tf.json
 *.tfvars
 *.tfplan
 infra/terraform/*.pem
+infra/terraform/keys/
 
 # Node
 node_modules/

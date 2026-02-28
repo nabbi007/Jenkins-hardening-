@@ -87,6 +87,55 @@ After apply, get Jenkins initial admin password:
 ssh -i <your-key>.pem ec2-user@<jenkins_public_ip> "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
 ```
 
+## SSH from localhost (recommended flow)
+
+Generate a dedicated local key pair (run on your machine):
+
+```bash
+mkdir -p ~/.ssh
+ssh-keygen -t ed25519 -f ~/.ssh/jenkins-hardening -C "jenkins-hardening"
+chmod 600 ~/.ssh/jenkins-hardening
+chmod 644 ~/.ssh/jenkins-hardening.pub
+```
+
+Set these in `infra/terraform/terraform.tfvars`:
+
+```hcl
+create_jenkins_instance  = true
+jenkins_public_key_path  = "/home/<your-user>/.ssh/jenkins-hardening.pub"
+jenkins_private_key_path = "/home/<your-user>/.ssh/jenkins-hardening"
+```
+
+Then apply and use Terraform outputs:
+
+```bash
+cd infra/terraform
+terraform apply
+terraform output -raw jenkins_ssh_command
+terraform output -raw jenkins_health_check_command
+```
+
+## Install CI/Security Tooling On Jenkins Host
+
+Use this script after SSH if you want a full tool bootstrap/update on the instance:
+
+```bash
+cd /home/ec2-user/jenkins-hardening
+sudo bash scripts/install_ci_security_stack.sh
+```
+
+What it installs/configures:
+- Jenkins LTS + Docker + Java 21 + Node.js 20 + AWS CLI + Terraform
+- Trivy + Gitleaks + Syft
+- Jenkins plugins from `jenkins/plugins.txt` (if present)
+- SonarQube via Docker (skips automatically on low-memory hosts unless forced)
+
+Force SonarQube install on low-memory instance:
+
+```bash
+sudo FORCE_LOW_MEM_SONARQUBE=true bash scripts/install_ci_security_stack.sh
+```
+
 ## Validation test (required)
 
 1. Intentionally add a vulnerable dependency to backend, for example:

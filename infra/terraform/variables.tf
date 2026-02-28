@@ -100,6 +100,12 @@ variable "ecr_lifecycle_keep_images" {
   default     = 30
 }
 
+variable "ecr_create_repositories" {
+  description = "Create ECR repositories if true; if false, use existing repositories"
+  type        = bool
+  default     = false
+}
+
 variable "ecs_cluster_name" {
   description = "ECS cluster name"
   type        = string
@@ -235,7 +241,7 @@ variable "memory_alarm_threshold" {
 variable "create_jenkins_instance" {
   description = "Create a Jenkins EC2 instance with bootstrap user data"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "jenkins_subnet_id" {
@@ -259,7 +265,7 @@ variable "jenkins_ingress_ports" {
 variable "jenkins_instance_type" {
   description = "EC2 instance type for Jenkins server"
   type        = string
-  default     = "t3.large"
+  default     = "t3.medium"
 }
 
 variable "jenkins_root_volume_size" {
@@ -270,6 +276,24 @@ variable "jenkins_root_volume_size" {
 
 variable "jenkins_key_name" {
   description = "Optional key pair name for SSH access to Jenkins instance"
+  type        = string
+  default     = null
+}
+
+variable "jenkins_public_key_path" {
+  description = "Optional local path to SSH public key. If set and jenkins_key_name is null, Terraform imports this key as an EC2 key pair"
+  type        = string
+  default     = null
+}
+
+variable "jenkins_key_pair_name" {
+  description = "Optional EC2 key pair name used when importing jenkins_public_key_path"
+  type        = string
+  default     = null
+}
+
+variable "jenkins_private_key_path" {
+  description = "Optional local path to the SSH private key (used only for ssh command output)"
   type        = string
   default     = null
 }

@@ -28,8 +28,6 @@ pipeline {
     string(name: 'BACKEND_LOG_GROUP', defaultValue: '/ecs/voting-app/backend', description: 'CloudWatch log group for backend container')
     string(name: 'FRONTEND_LOG_GROUP', defaultValue: '/ecs/voting-app/frontend', description: 'CloudWatch log group for frontend container')
 
-    string(name: 'SONAR_HOST_URL', defaultValue: 'http://54.194.104.90:9000', description: 'SonarQube server URL')
-
     booleanParam(name: 'ENABLE_SONARQUBE', defaultValue: true, description: 'Run SonarQube SAST + quality gate')
     booleanParam(name: 'ENABLE_OWASP_DC', defaultValue: true, description: 'Run OWASP Dependency-Check (SCA)')
     booleanParam(name: 'ENABLE_GITLEAKS', defaultValue: true, description: 'Run Gitleaks secret scan')
@@ -84,7 +82,7 @@ pipeline {
           env.BACKEND_IMAGE_URI = "${env.ECR_REGISTRY}/${params.BACKEND_ECR_REPO}:${env.IMAGE_TAG}"
           env.FRONTEND_IMAGE_URI = "${env.ECR_REGISTRY}/${params.FRONTEND_ECR_REPO}:${env.IMAGE_TAG}"
 
-          sh 'mkdir -p reports/security reports/security/dependency-check/backend reports/security/dependency-check/frontend reports/security/trivy reports/sbom reports/ecs .trivycache .dependency-check-data'
+          sh 'mkdir -p reports/security reports/security/dependency-check/backend reports/security/dependency-check/frontend reports/security/trivy reports/sbom reports/ecs .trivycache'
           sh 'test -f ecs/taskdef.template.json'
         }
       }
@@ -119,13 +117,11 @@ pipeline {
         expression { return params.ENABLE_SONARQUBE }
       }
       steps {
-        withCredentials([string(credentialsId: 'sonarqube_token', variable: 'SONAR_TOKEN')]) {
+        withSonarQubeEnv('sonar-qube-server') {
           sh '''
             set -euo pipefail
             docker run --rm \
               --network host \
-              -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-              -e SONAR_TOKEN="${SONAR_TOKEN}" \
               -v "$PWD:/usr/src" \
               sonarsource/sonar-scanner-cli:5.0.1 \
               -Dsonar.projectVersion="${IMAGE_TAG}" \
@@ -136,36 +132,29 @@ pipeline {
       }
     }
 
-    stage('SCA - OWASP Dependency-Check') {
+    stage('Dependency Scanning') {
       when {
         expression { return params.ENABLE_OWASP_DC }
       }
-      steps {
-        sh '''
-          set -euo pipefail
+      steps { 
+        stage('OWASP Dependency Check') {
+          steps {
+            script {
+              def dcArgs = """
+                --project ${env.JOB_NAME}-${env.IMAGE_TAG} \
+                --scan ${env.WORKSPACE} \
+                --out ${env.WORKSPACE}/${REPORT_DIR}/dependency-check \
+                --format ALL \
+                --disableYarnAudit \
+                --prettyPrint \
+                --failOnCVSS ${params.FAIL_ON_CVSS.trim()}
+              """.stripIndent().trim()
 
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v "$PWD:/src" \
-            -v "$PWD/.dependency-check-data:/usr/share/dependency-check/data" \
-            owasp/dependency-check:latest \
-            --project "backend-${JOB_NAME}-${BUILD_NUMBER}" \
-            --scan /src/backend/package-lock.json \
-            --out /src/reports/security/dependency-check/backend \
-            --format HTML --format JSON --prettyPrint \
-            --failOnCVSS "${FAIL_ON_CVSS}"
-
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v "$PWD:/src" \
-            -v "$PWD/.dependency-check-data:/usr/share/dependency-check/data" \
-            owasp/dependency-check:latest \
-            --project "frontend-${JOB_NAME}-${BUILD_NUMBER}" \
-            --scan /src/frontend/package-lock.json \
-            --out /src/reports/security/dependency-check/frontend \
-            --format HTML --format JSON --prettyPrint \
-            --failOnCVSS "${FAIL_ON_CVSS}"
-        '''
+              dependencyCheck additionalArguments: dcArgs, odcInstallation: 'OWASP-DepCheck-10'
+              dependencyCheckPublisher failedTotalCritical: 1, pattern: "${REPORT_DIR}/dependency-check/dependency-check-report.xml"
+            }
+          }
+        }
       }
     }
 
@@ -213,7 +202,7 @@ pipeline {
             -v "$PWD/.trivycache:/root/.cache/trivy" \
             aquasec/trivy:0.58.1 image \
             --scanners vuln \
-            --severity "${TRIVY_SEVERITIES}" \
+            --severity "${TRIVY_SEVERITI  ES}" \
             --ignore-unfixed \
             --exit-code 1 \
             --format json \

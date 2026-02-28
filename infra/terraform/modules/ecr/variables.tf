@@ -4,8 +4,14 @@ variable "project_name" {
 }
 
 variable "repositories" {
-  description = "List of ECR repositories to create"
+  description = "List of ECR repositories to manage/use"
   type        = list(string)
+}
+
+variable "create_repositories" {
+  description = "Create ECR repositories when true; when false, reuse existing repositories by name"
+  type        = bool
+  default     = false
 }
 
 variable "image_tag_mutability" {
