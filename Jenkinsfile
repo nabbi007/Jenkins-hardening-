@@ -132,28 +132,24 @@ pipeline {
       }
     }
 
-    stage('Dependency Scanning') {
+    stage('Dependency Scanning - OWASP') {
       when {
         expression { return params.ENABLE_OWASP_DC }
       }
-      steps { 
-        stage('OWASP Dependency Check') {
-          steps {
-            script {
-              def dcArgs = """
-                --project ${env.JOB_NAME}-${env.IMAGE_TAG} \
-                --scan ${env.WORKSPACE} \
-                --out ${env.WORKSPACE}/${REPORT_DIR}/dependency-check \
-                --format ALL \
-                --disableYarnAudit \
-                --prettyPrint \
-                --failOnCVSS ${params.FAIL_ON_CVSS.trim()}
-              """.stripIndent().trim()
+      steps {
+        script {
+          def dcArgs = """
+            --project ${env.JOB_NAME}-${env.IMAGE_TAG} \
+            --scan ${env.WORKSPACE} \
+            --out ${env.WORKSPACE}/${REPORT_DIR}/dependency-check \
+            --format ALL \
+            --disableYarnAudit \
+            --prettyPrint \
+            --failOnCVSS ${params.FAIL_ON_CVSS.trim()}
+          """.stripIndent().trim()
 
-              dependencyCheck additionalArguments: dcArgs, odcInstallation: 'OWASP-DepCheck-10'
-              dependencyCheckPublisher failedTotalCritical: 1, pattern: "${REPORT_DIR}/dependency-check/dependency-check-report.xml"
-            }
-          }
+          dependencyCheck additionalArguments: dcArgs, odcInstallation: 'OWASP-DepCheck-10'
+          dependencyCheckPublisher failedTotalCritical: 1, pattern: "${REPORT_DIR}/dependency-check/dependency-check-report.xml"
         }
       }
     }
@@ -202,7 +198,7 @@ pipeline {
             -v "$PWD/.trivycache:/root/.cache/trivy" \
             aquasec/trivy:0.58.1 image \
             --scanners vuln \
-            --severity "${TRIVY_SEVERITI  ES}" \
+            --severity "${TRIVY_SEVERITIES}" \
             --ignore-unfixed \
             --exit-code 1 \
             --format json \
