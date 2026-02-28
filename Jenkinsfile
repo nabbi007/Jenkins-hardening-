@@ -140,20 +140,31 @@ pipeline {
         expression { return params.ENABLE_OWASP_DC }
       }
       steps {
-        script {
-          def dcArgs = """
-            --project ${env.JOB_NAME}-${env.IMAGE_TAG} \
-            --scan ${env.WORKSPACE} \
-            --out ${env.WORKSPACE}/${REPORT_DIR}/dependency-check \
+        sh '''
+          set -euo pipefail
+          
+          docker run --rm \
+            -v "$PWD:/src" \
+            -v "$PWD/reports/security/dependency-check:/report" \
+            -v "$HOME/.m2:/usr/share/dependency-check/data" \
+            owasp/dependency-check:latest \
+            --scan /src \
             --format ALL \
-            --disableYarnAudit \
-            --prettyPrint \
-            --failOnCVSS ${params.FAIL_ON_CVSS.trim()}
-          """.stripIndent().trim()
-
-          dependencyCheck additionalArguments: dcArgs, odcInstallation: 'OWASP-DepCheck-10'
-          dependencyCheckPublisher failedTotalCritical: 1, pattern: "${REPORT_DIR}/dependency-check/dependency-check-report.xml"
-        }
+            --project "${JOB_NAME}-${IMAGE_TAG}" \
+            --out /report \
+            --failOnCVSS ${FAIL_ON_CVSS} \
+            --enableExperimental \
+            --disableYarnAudit
+        '''
+        
+        publishHTML([
+          allowMissing: false,
+          alwaysLinkToLastBuild: true,
+          keepAll: true,
+          reportDir: "${REPORT_DIR}/dependency-check",
+          reportFiles: 'dependency-check-report.html',
+          reportName: 'OWASP Dependency-Check Report'
+        ])
       }
     }
 
