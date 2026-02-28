@@ -123,7 +123,10 @@ pipeline {
             docker run --rm \
               --network host \
               -v "$PWD:/usr/src" \
+              -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+              -e SONAR_TOKEN="${SONAR_AUTH_TOKEN}" \
               sonarsource/sonar-scanner-cli:5.0.1 \
+              -Dsonar.login="${SONAR_AUTH_TOKEN}" \
               -Dsonar.projectVersion="${IMAGE_TAG}" \
               -Dsonar.qualitygate.wait=true \
               -Dsonar.qualitygate.timeout=600
