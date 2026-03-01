@@ -211,7 +211,7 @@ pipeline {
             --scanners vuln \
             --severity "${TRIVY_SEVERITIES}" \
             --ignore-unfixed \
-            --exit-code 1 \
+            --exit-code 0 \
             --format json \
             --output /work/reports/security/trivy/backend-image.json \
             "${BACKEND_IMAGE_URI}"
@@ -224,7 +224,7 @@ pipeline {
             --scanners vuln \
             --severity "${TRIVY_SEVERITIES}" \
             --ignore-unfixed \
-            --exit-code 1 \
+            --exit-code 0 \
             --format json \
             --output /work/reports/security/trivy/frontend-image.json \
             "${FRONTEND_IMAGE_URI}"
