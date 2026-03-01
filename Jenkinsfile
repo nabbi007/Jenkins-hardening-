@@ -12,77 +12,56 @@ pipeline {
     githubPush()
   }
 
+  // Feature flags only — these make sense as per-build toggles
   parameters {
-    string(name: 'AWS_REGION', defaultValue: 'eu-west-1', description: 'AWS region containing ECR/ECS resources')
-    string(name: 'ECR_ACCOUNT_ID', defaultValue: '', description: 'AWS account ID for ECR. Blank = auto-detect from Jenkins IAM role')
-    string(name: 'BACKEND_ECR_REPO', defaultValue: 'backend-service', description: 'ECR repository for backend image')
-    string(name: 'FRONTEND_ECR_REPO', defaultValue: 'frontend-web', description: 'ECR repository for frontend image')
-
-    string(name: 'ECS_CLUSTER_NAME', defaultValue: 'voting-cluster', description: 'Target ECS cluster name')
-    string(name: 'ECS_SERVICE_NAME', defaultValue: 'voting-app', description: 'Target ECS service name')
-    string(name: 'ECS_TASK_FAMILY', defaultValue: 'voting-app', description: 'ECS task definition family')
-    string(name: 'ECS_EXECUTION_ROLE_ARN', defaultValue: '', description: 'Execution role ARN. Blank = reuse current service task definition role')
-    string(name: 'ECS_TASK_ROLE_ARN', defaultValue: '', description: 'Task role ARN. Blank = reuse current service task definition role')
-    string(name: 'ECS_TASK_CPU', defaultValue: '512', description: 'Task-level CPU units for ECS task definition')
-    string(name: 'ECS_TASK_MEMORY', defaultValue: '1024', description: 'Task-level memory (MiB) for ECS task definition')
-    string(name: 'BACKEND_LOG_GROUP', defaultValue: '/ecs/voting-app/backend', description: 'CloudWatch log group for backend container')
-    string(name: 'FRONTEND_LOG_GROUP', defaultValue: '/ecs/voting-app/frontend', description: 'CloudWatch log group for frontend container')
-
-    booleanParam(name: 'ENABLE_SONARQUBE', defaultValue: true, description: 'Run SonarQube SAST + quality gate')
-    booleanParam(name: 'ENABLE_OWASP_DC', defaultValue: true, description: 'Run OWASP Dependency-Check (SCA)')
-    booleanParam(name: 'ENABLE_GITLEAKS', defaultValue: true, description: 'Run Gitleaks secret scan')
-    booleanParam(name: 'ENABLE_TRIVY', defaultValue: true, description: 'Run Trivy image vulnerability scan')
-    booleanParam(name: 'ENABLE_SBOM', defaultValue: true, description: 'Generate SBOM using Syft')
-
-    string(name: 'FAIL_ON_CVSS', defaultValue: '7', description: 'OWASP Dependency-Check fail threshold (7 = High/Critical)')
-    string(name: 'TRIVY_SEVERITIES', defaultValue: 'HIGH,CRITICAL', description: 'Trivy severity gate')
-    string(name: 'ECR_LIFECYCLE_MAX_IMAGES', defaultValue: '30', description: 'Retain only latest N images in each ECR repo')
-    string(name: 'ECS_TASKDEF_KEEP_REVISIONS', defaultValue: '15', description: 'Retain only latest N task definition revisions after successful deploy')
-    booleanParam(name: 'DEPLOY_FROM_NON_MAIN', defaultValue: false, description: 'Allow ECS deployment for non-main branches')
+    booleanParam(name: 'ENABLE_SONARQUBE',     defaultValue: true,  description: 'Run SonarQube SAST')
+    booleanParam(name: 'ENABLE_NPM_AUDIT',     defaultValue: true,  description: 'Run npm audit SCA')
+    booleanParam(name: 'ENABLE_GITLEAKS',      defaultValue: true,  description: 'Run Gitleaks secret scan')
+    booleanParam(name: 'ENABLE_TRIVY',         defaultValue: true,  description: 'Run Trivy image scan')
+    booleanParam(name: 'ENABLE_SBOM',          defaultValue: true,  description: 'Generate SBOM using Syft')
+    booleanParam(name: 'DEPLOY_FROM_NON_MAIN', defaultValue: false, description: 'Allow deploy from non-main branches')
   }
 
   environment {
-    REPORT_DIR = 'reports/security'
-    SBOM_DIR = 'reports/sbom'
-    ECS_REPORT_DIR = 'reports/ecs'
-    TASKDEF_TEMPLATE = 'ecs/taskdef.template.json'
-
+    // Loaded from Jenkins Global Env Vars — no values here
+    REPORT_DIR             = 'reports/security'
+    SBOM_DIR               = 'reports/sbom'
+    ECS_REPORT_DIR         = 'reports/ecs'
+    TASKDEF_TEMPLATE       = 'ecs/taskdef.template.json'
     BACKEND_CONTAINER_NAME = 'backend'
-    FRONTEND_CONTAINER_NAME = 'frontend'
+    FRONTEND_CONTAINER_NAME= 'frontend'
+
+    // Secrets from Jenkins Credentials
+    ECS_EXECUTION_ROLE_ARN = credentials('ecs-execution-role-arn')
+    ECS_TASK_ROLE_ARN      = credentials('ecs-task-role-arn')
   }
 
   stages {
     stage('Checkout') {
-      steps {
-        checkout scm
-      }
+      steps { checkout scm }
     }
 
     stage('Prepare Build Metadata') {
       steps {
         script {
-          env.GIT_SHA = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
+          env.GIT_SHA     = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
           env.SAFE_BRANCH = (env.BRANCH_NAME ?: 'detached').replaceAll('[^a-zA-Z0-9_.-]', '-')
-          env.IMAGE_TAG = "${env.SAFE_BRANCH}-${env.GIT_SHA}-${env.BUILD_NUMBER}"
+          env.IMAGE_TAG   = "${env.SAFE_BRANCH}-${env.GIT_SHA}-${env.BUILD_NUMBER}"
 
-          if (!params.ECR_ACCOUNT_ID?.trim()) {
-            env.ECR_ACCOUNT_ID_EFFECTIVE = sh(
-              script: 'aws sts get-caller-identity --query Account --output text',
-              returnStdout: true
-            ).trim()
-          } else {
-            env.ECR_ACCOUNT_ID_EFFECTIVE = params.ECR_ACCOUNT_ID.trim()
-          }
+          env.ECR_ACCOUNT_ID_EFFECTIVE = sh(
+            script: 'aws sts get-caller-identity --query Account --output text',
+            returnStdout: true
+          ).trim()
 
           if (!env.ECR_ACCOUNT_ID_EFFECTIVE) {
-            error('Unable to determine AWS account ID. Set ECR_ACCOUNT_ID or ensure Jenkins IAM role has sts:GetCallerIdentity permission.')
+            error('Unable to determine AWS account ID. Ensure Jenkins IAM role has sts:GetCallerIdentity permission.')
           }
 
-          env.ECR_REGISTRY = "${env.ECR_ACCOUNT_ID_EFFECTIVE}.dkr.ecr.${params.AWS_REGION}.amazonaws.com"
-          env.BACKEND_IMAGE_URI = "${env.ECR_REGISTRY}/${params.BACKEND_ECR_REPO}:${env.IMAGE_TAG}"
-          env.FRONTEND_IMAGE_URI = "${env.ECR_REGISTRY}/${params.FRONTEND_ECR_REPO}:${env.IMAGE_TAG}"
+          env.ECR_REGISTRY      = "${env.ECR_ACCOUNT_ID_EFFECTIVE}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+          env.BACKEND_IMAGE_URI = "${env.ECR_REGISTRY}/${env.BACKEND_ECR_REPO}:${env.IMAGE_TAG}"
+          env.FRONTEND_IMAGE_URI= "${env.ECR_REGISTRY}/${env.FRONTEND_ECR_REPO}:${env.IMAGE_TAG}"
 
-          sh 'mkdir -p reports/security reports/security/dependency-check/backend reports/security/dependency-check/frontend reports/security/trivy reports/sbom reports/ecs .trivycache'
+          sh 'mkdir -p reports/security reports/security/trivy reports/sbom reports/ecs .trivycache'
           sh 'test -f ecs/taskdef.template.json'
         }
       }
@@ -112,79 +91,64 @@ pipeline {
       }
     }
 
-    stage('SAST - SonarQube Quality Gate') {
-      when {
-        expression { return params.ENABLE_SONARQUBE }
-      }
-      steps {
-        withSonarQubeEnv('sonar-qube-server') {
-          sh '''
-            set -euo pipefail
-            docker run --rm \
-              --network host \
-              -v "$PWD:/usr/src" \
-              -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-              -e SONAR_TOKEN="${SONAR_AUTH_TOKEN}" \
-              sonarsource/sonar-scanner-cli:5.0.1 \
-              -Dsonar.login="${SONAR_AUTH_TOKEN}" \
-              -Dsonar.projectVersion="${IMAGE_TAG}" \
-              -Dsonar.qualitygate.wait=true \
-              -Dsonar.qualitygate.timeout=600
-          '''
-        }
-      }
-    }
-
-    stage('Dependency Scanning - npm audit') {
-      when {
-        expression { return params.ENABLE_OWASP_DC }
-      }
+    stage('Security Scans') {
       parallel {
-        stage('Backend Dependencies') {
+        stage('SAST - SonarQube') {
+          when { expression { return params.ENABLE_SONARQUBE } }
           steps {
-            dir('backend') {
+            withSonarQubeEnv('sonar-qube-server') {
               sh '''
                 set -euo pipefail
-                npm audit --audit-level=high --json > ../reports/security/npm-audit-backend.json || true
-                npm audit --audit-level=high || echo "Found vulnerabilities - review reports/security/npm-audit-backend.json"
+                docker run --rm \
+                  --network host \
+                  -v "$PWD:/usr/src" \
+                  -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+                  -e SONAR_TOKEN="${SONAR_AUTH_TOKEN}" \
+                  sonarsource/sonar-scanner-cli:5.0.1 \
+                  -Dsonar.login="${SONAR_AUTH_TOKEN}" \
+                  -Dsonar.projectVersion="${IMAGE_TAG}" \
+                  -Dsonar.qualitygate.wait=true \
+                  -Dsonar.qualitygate.timeout=600
               '''
             }
           }
         }
-        stage('Frontend Dependencies') {
-          steps {
-            dir('frontend') {
-              sh '''
-                set -euo pipefail
-                npm audit --audit-level=high --json > ../reports/security/npm-audit-frontend.json || true
-                npm audit --audit-level=high || echo "Found vulnerabilities - review reports/security/npm-audit-frontend.json"
-              '''
-            }
-          }
-        }
-      }
-    }
 
-    stage('Secret Scan - Gitleaks') {
-      when {
-        expression { return params.ENABLE_GITLEAKS }
-      }
-      steps {
-        sh '''
-          set -euo pipefail
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v "$PWD:/repo" \
-            zricethezav/gitleaks:v8.24.2 detect \
-            --source /repo \
-            --no-git \
-            --gitleaks-ignore-path /repo/.gitleaksignore \
-            --redact \
-            --no-banner \
-            --report-format sarif \
-            --report-path /repo/reports/security/gitleaks.sarif \
-            --exit-code 1
-        '''
+        stage('SCA - npm audit') {
+          when { expression { return params.ENABLE_NPM_AUDIT } }
+          steps {
+            sh '''
+              set -euo pipefail
+              cd backend
+              npm audit --audit-level=high --json > ../reports/security/npm-audit-backend.json || true
+              npm audit --audit-level=high
+              cd ../frontend
+              npm audit --audit-level=high --json > ../reports/security/npm-audit-frontend.json || true
+              npm audit --audit-level=high
+            '''
+          }
+        }
+
+        stage('Secrets - Gitleaks') {
+          when { expression { return params.ENABLE_GITLEAKS } }
+          steps {
+            sh '''
+              set -euo pipefail
+              docker run --rm \
+                -u "$(id -u):$(id -g)" \
+                -v "$PWD:/repo" \
+                zricethezav/gitleaks:v8.24.2 detect \
+                --source /repo \
+                --no-git \
+                --gitleaks-ignore-path /repo/.gitleaksignore \
+                --redact \
+                --no-banner \
+                --report-format sarif \
+                --report-path /repo/reports/security/gitleaks.sarif \
+                --exit-code 1
+            '''
+          }
+        }
       }
     }
 
@@ -195,189 +159,110 @@ pipeline {
       }
     }
 
-    stage('Container Scan - Trivy') {
-      when {
-        expression { return params.ENABLE_TRIVY }
-      }
-      steps {
-        sh '''
-          set -euo pipefail
+    stage('Post-Build Scans') {
+      parallel {
+        stage('Container Scan - Trivy') {
+          when { expression { return params.ENABLE_TRIVY } }
+          steps {
+            sh '''
+              set -euo pipefail
+              for IMAGE_URI in "$BACKEND_IMAGE_URI" "$FRONTEND_IMAGE_URI"; do
+                NAME=$(echo "$IMAGE_URI" | awk -F/ '{print $NF}' | cut -d: -f1)
+                docker run --rm \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v "$PWD/.trivycache:/root/.cache/trivy" \
+                  -e TRIVY_CACHE_DIR=/root/.cache/trivy \
+                  aquasec/trivy:0.58.1 image \
+                  --scanners vuln \
+                  --severity "${TRIVY_SEVERITIES}" \
+                  --ignore-unfixed \
+                  --exit-code 1 \
+                  --format json \
+                  --output "/work/reports/security/trivy/${NAME}.json" \
+                  "$IMAGE_URI"
+              done
+            '''
+          }
+        }
 
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/work" \
-            -v "$PWD/.trivycache:/root/.cache/trivy" \
-            aquasec/trivy:0.58.1 image \
-            --scanners vuln \
-            --severity "${TRIVY_SEVERITIES}" \
-            --ignore-unfixed \
-            --exit-code 0 \
-            --format json \
-            --output /work/reports/security/trivy/backend-image.json \
-            "${BACKEND_IMAGE_URI}"
-
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/work" \
-            -v "$PWD/.trivycache:/root/.cache/trivy" \
-            aquasec/trivy:0.58.1 image \
-            --scanners vuln \
-            --severity "${TRIVY_SEVERITIES}" \
-            --ignore-unfixed \
-            --exit-code 0 \
-            --format json \
-            --output /work/reports/security/trivy/frontend-image.json \
-            "${FRONTEND_IMAGE_URI}"
-        '''
-      }
-    }
-
-    stage('Generate SBOM - Syft') {
-      when {
-        expression { return params.ENABLE_SBOM }
-      }
-      steps {
-        sh '''
-          set -euo pipefail
-
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/work" \
-            anchore/syft:v1.20.0 "${BACKEND_IMAGE_URI}" \
-            -o cyclonedx-json=/work/reports/sbom/backend.cyclonedx.json
-
-          docker run --rm \
-            -u "$(id -u):$(id -g)" \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/work" \
-            anchore/syft:v1.20.0 "${FRONTEND_IMAGE_URI}" \
-            -o cyclonedx-json=/work/reports/sbom/frontend.cyclonedx.json
-        '''
+        stage('SBOM - Syft') {
+          when { expression { return params.ENABLE_SBOM } }
+          steps {
+            sh '''
+              set -euo pipefail
+              for IMAGE_URI in "$BACKEND_IMAGE_URI" "$FRONTEND_IMAGE_URI"; do
+                NAME=$(echo "$IMAGE_URI" | awk -F/ '{print $NF}' | cut -d: -f1)
+                docker run --rm \
+                  -u "$(id -u):$(id -g)" \
+                  -v /var/run/docker.sock:/var/run/docker.sock \
+                  -v "$PWD:/work" \
+                  anchore/syft:v1.20.0 "$IMAGE_URI" \
+                  -o cyclonedx-json=/work/reports/sbom/${NAME}.cyclonedx.json
+              done
+            '''
+          }
+        }
       }
     }
 
-    stage('Push Versioned Images to ECR') {
+    stage('Push to ECR') {
       steps {
         sh '''
           set -euo pipefail
-          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          aws ecr get-login-password --region "$AWS_REGION" | \
+            docker login --username AWS --password-stdin "$ECR_REGISTRY"
           docker push "$BACKEND_IMAGE_URI"
           docker push "$FRONTEND_IMAGE_URI"
         '''
       }
     }
 
-    stage('Tag Latest (main only)') {
-      when {
-        branch 'main'
-      }
+    stage('Tag Latest') {
+      when { branch 'main' }
       steps {
         sh '''
           set -euo pipefail
-          BACKEND_LATEST="${ECR_REGISTRY}/${BACKEND_ECR_REPO}:latest"
-          FRONTEND_LATEST="${ECR_REGISTRY}/${FRONTEND_ECR_REPO}:latest"
-
-          docker tag "$BACKEND_IMAGE_URI" "$BACKEND_LATEST"
-          docker tag "$FRONTEND_IMAGE_URI" "$FRONTEND_LATEST"
-
-          docker push "$BACKEND_LATEST"
-          docker push "$FRONTEND_LATEST"
+          docker tag "$BACKEND_IMAGE_URI"  "${ECR_REGISTRY}/${BACKEND_ECR_REPO}:latest"
+          docker tag "$FRONTEND_IMAGE_URI" "${ECR_REGISTRY}/${FRONTEND_ECR_REPO}:latest"
+          docker push "${ECR_REGISTRY}/${BACKEND_ECR_REPO}:latest"
+          docker push "${ECR_REGISTRY}/${FRONTEND_ECR_REPO}:latest"
         '''
       }
     }
 
-    stage('Render ECS Task Definition') {
+    stage('Render & Register ECS Task Definition') {
       steps {
-        script {
-          def execRole = params.ECS_EXECUTION_ROLE_ARN?.trim()
-          def taskRole = params.ECS_TASK_ROLE_ARN?.trim()
-
-          if (!execRole || !taskRole) {
-            def existingTaskDef = sh(
-              script: "aws ecs describe-services --cluster '${params.ECS_CLUSTER_NAME}' --services '${params.ECS_SERVICE_NAME}' --query 'services[0].taskDefinition' --output text",
-              returnStdout: true
-            ).trim()
-
-            if (existingTaskDef && existingTaskDef != 'None') {
-              if (!execRole) {
-                execRole = sh(
-                  script: "aws ecs describe-task-definition --task-definition '${existingTaskDef}' --query 'taskDefinition.executionRoleArn' --output text",
-                  returnStdout: true
-                ).trim()
-              }
-              if (!taskRole) {
-                taskRole = sh(
-                  script: "aws ecs describe-task-definition --task-definition '${existingTaskDef}' --query 'taskDefinition.taskRoleArn' --output text",
-                  returnStdout: true
-                ).trim()
-              }
-            }
-          }
-
-          if (!execRole || execRole == 'None') {
-            error('ECS execution role ARN is required. Set ECS_EXECUTION_ROLE_ARN or make sure the service already exists with a valid role.')
-          }
-          if (!taskRole || taskRole == 'None') {
-            error('ECS task role ARN is required. Set ECS_TASK_ROLE_ARN or make sure the service already exists with a valid role.')
-          }
-
-          env.ECS_EXEC_ROLE_EFFECTIVE = execRole
-          env.ECS_TASK_ROLE_EFFECTIVE = taskRole
-        }
-
         sh '''
           set -euo pipefail
 
-          escape_for_sed() {
-            printf '%s' "$1" | sed -e 's/[\\/&]/\\\\&/g'
-          }
-
-          BACKEND_IMAGE_ESCAPED="$(escape_for_sed "$BACKEND_IMAGE_URI")"
-          FRONTEND_IMAGE_ESCAPED="$(escape_for_sed "$FRONTEND_IMAGE_URI")"
-          EXEC_ROLE_ESCAPED="$(escape_for_sed "$ECS_EXEC_ROLE_EFFECTIVE")"
-          TASK_ROLE_ESCAPED="$(escape_for_sed "$ECS_TASK_ROLE_EFFECTIVE")"
-          REGION_ESCAPED="$(escape_for_sed "$AWS_REGION")"
-          FAMILY_ESCAPED="$(escape_for_sed "$ECS_TASK_FAMILY")"
+          escape_for_sed() { printf '%s' "$1" | sed -e 's/[\\/&]/\\\\&/g'; }
 
           sed \
-            -e "s/__TASK_FAMILY__/${FAMILY_ESCAPED}/g" \
+            -e "s/__TASK_FAMILY__/$(escape_for_sed "$ECS_TASK_FAMILY")/g" \
             -e "s/__TASK_CPU__/${ECS_TASK_CPU}/g" \
             -e "s/__TASK_MEMORY__/${ECS_TASK_MEMORY}/g" \
-            -e "s/__AWS_REGION__/${REGION_ESCAPED}/g" \
-            -e "s/__EXECUTION_ROLE_ARN__/${EXEC_ROLE_ESCAPED}/g" \
-            -e "s/__TASK_ROLE_ARN__/${TASK_ROLE_ESCAPED}/g" \
-            -e "s/__BACKEND_IMAGE__/${BACKEND_IMAGE_ESCAPED}/g" \
-            -e "s/__FRONTEND_IMAGE__/${FRONTEND_IMAGE_ESCAPED}/g" \
+            -e "s/__AWS_REGION__/$(escape_for_sed "$AWS_REGION")/g" \
+            -e "s/__EXECUTION_ROLE_ARN__/$(escape_for_sed "$ECS_EXECUTION_ROLE_ARN")/g" \
+            -e "s/__TASK_ROLE_ARN__/$(escape_for_sed "$ECS_TASK_ROLE_ARN")/g" \
+            -e "s/__BACKEND_IMAGE__/$(escape_for_sed "$BACKEND_IMAGE_URI")/g" \
+            -e "s/__FRONTEND_IMAGE__/$(escape_for_sed "$FRONTEND_IMAGE_URI")/g" \
             -e "s#__BACKEND_LOG_GROUP__#${BACKEND_LOG_GROUP}#g" \
             -e "s#__FRONTEND_LOG_GROUP__#${FRONTEND_LOG_GROUP}#g" \
             -e "s/__BACKEND_CONTAINER_NAME__/${BACKEND_CONTAINER_NAME}/g" \
             -e "s/__FRONTEND_CONTAINER_NAME__/${FRONTEND_CONTAINER_NAME}/g" \
             "$TASKDEF_TEMPLATE" > "$ECS_REPORT_DIR/taskdef.rendered.json"
-
-          cp "$ECS_REPORT_DIR/taskdef.rendered.json" ecs/taskdef.revision.json
         '''
-      }
-    }
-
-    stage('Register ECS Task Definition Revision') {
-      steps {
         script {
           env.NEW_TASK_DEF_ARN = sh(
             script: "aws ecs register-task-definition --cli-input-json file://${env.ECS_REPORT_DIR}/taskdef.rendered.json --query 'taskDefinition.taskDefinitionArn' --output text",
             returnStdout: true
           ).trim()
+          sh "echo '${env.NEW_TASK_DEF_ARN}' > ${env.ECS_REPORT_DIR}/task-definition-arn.txt"
         }
-
-        sh '''
-          set -euo pipefail
-          printf '%s\n' "$NEW_TASK_DEF_ARN" > "$ECS_REPORT_DIR/task-definition-arn.txt"
-          aws ecs describe-task-definition --task-definition "$NEW_TASK_DEF_ARN" > "$ECS_REPORT_DIR/task-definition.revision.json"
-        '''
       }
     }
 
-    stage('Deploy to ECS Service') {
+    stage('Deploy to ECS') {
       when {
         anyOf {
           branch 'main'
@@ -387,7 +272,6 @@ pipeline {
       steps {
         sh '''
           set -euo pipefail
-
           aws ecs update-service \
             --cluster "$ECS_CLUSTER_NAME" \
             --service "$ECS_SERVICE_NAME" \
@@ -397,10 +281,6 @@ pipeline {
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER_NAME" \
             --services "$ECS_SERVICE_NAME"
-
-          aws ecs describe-services \
-            --cluster "$ECS_CLUSTER_NAME" \
-            --services "$ECS_SERVICE_NAME" > "$ECS_REPORT_DIR/service-after-update.json"
         '''
       }
     }
@@ -416,48 +296,21 @@ pipeline {
         sh '''
           set -euo pipefail
 
-          cat > "$ECS_REPORT_DIR/ecr-lifecycle-policy.json" <<POLICY
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Keep only the latest ${ECR_LIFECYCLE_MAX_IMAGES} images",
-      "selection": {
-        "tagStatus": "any",
-        "countType": "imageCountMoreThan",
-        "countNumber": ${ECR_LIFECYCLE_MAX_IMAGES}
-      },
-      "action": {
-        "type": "expire"
-      }
-    }
-  ]
-}
-POLICY
+          POLICY=$(printf '{"rules":[{"rulePriority":1,"description":"Keep latest %s","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":%s},"action":{"type":"expire"}}]}' \
+            "$ECR_LIFECYCLE_MAX_IMAGES" "$ECR_LIFECYCLE_MAX_IMAGES")
 
-          aws ecr put-lifecycle-policy \
-            --repository-name "$BACKEND_ECR_REPO" \
-            --lifecycle-policy-text "$(cat "$ECS_REPORT_DIR/ecr-lifecycle-policy.json")" > "$ECS_REPORT_DIR/ecr-lifecycle-backend.json"
+          aws ecr put-lifecycle-policy --repository-name "$BACKEND_ECR_REPO"  --lifecycle-policy-text "$POLICY"
+          aws ecr put-lifecycle-policy --repository-name "$FRONTEND_ECR_REPO" --lifecycle-policy-text "$POLICY"
 
-          aws ecr put-lifecycle-policy \
-            --repository-name "$FRONTEND_ECR_REPO" \
-            --lifecycle-policy-text "$(cat "$ECS_REPORT_DIR/ecr-lifecycle-policy.json")" > "$ECS_REPORT_DIR/ecr-lifecycle-frontend.json"
-
-          KEEP="${ECS_TASKDEF_KEEP_REVISIONS}"
           aws ecs list-task-definitions \
             --family-prefix "$ECS_TASK_FAMILY" \
-            --sort DESC \
-            --query 'taskDefinitionArns[]' \
-            --output text | tr '\t' '\n' > "$ECS_REPORT_DIR/task-definition-list.txt"
-
-          tail -n +$((KEEP + 1)) "$ECS_REPORT_DIR/task-definition-list.txt" > "$ECS_REPORT_DIR/task-definition-prune-list.txt" || true
-
-          if [ -s "$ECS_REPORT_DIR/task-definition-prune-list.txt" ]; then
-            while IFS= read -r task_def_arn; do
-              [ -z "$task_def_arn" ] && continue
-              aws ecs deregister-task-definition --task-definition "$task_def_arn" >> "$ECS_REPORT_DIR/task-definition-pruned.jsonl"
-            done < "$ECS_REPORT_DIR/task-definition-prune-list.txt"
-          fi
+            --sort DESC --query 'taskDefinitionArns[]' --output text \
+            | tr '\t' '\n' \
+            | tail -n +$((ECS_TASKDEF_KEEP_REVISIONS + 1)) \
+            | while IFS= read -r arn; do
+                [ -z "$arn" ] && continue
+                aws ecs deregister-task-definition --task-definition "$arn"
+              done
         '''
       }
     }
@@ -476,10 +329,9 @@ POLICY
     }
     success {
       echo "Image tag: ${env.IMAGE_TAG}"
-      echo "Backend image: ${env.BACKEND_IMAGE_URI}"
-      echo "Frontend image: ${env.FRONTEND_IMAGE_URI}"
-      echo "Task definition ARN: ${env.NEW_TASK_DEF_ARN ?: 'N/A'}"
-      echo "ECS evidence file: reports/ecs/service-after-update.json"
+      echo "Backend:   ${env.BACKEND_IMAGE_URI}"
+      echo "Frontend:  ${env.FRONTEND_IMAGE_URI}"
+      echo "Task ARN:  ${env.NEW_TASK_DEF_ARN ?: 'N/A'}"
     }
   }
 }
