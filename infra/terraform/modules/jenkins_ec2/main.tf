@@ -39,6 +39,17 @@ data "aws_iam_policy_document" "jenkins_pipeline" {
   }
 
   statement {
+    sid    = "SecretsManagerRead"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:ListSecrets"
+    ]
+    resources = ["arn:aws:secretsmanager:${var.aws_region}:*:secret:jenkins/*"]
+  }
+
+  statement {
     sid    = "AllowEcrAuth"
     effect = "Allow"
     actions = [
@@ -58,6 +69,7 @@ data "aws_iam_policy_document" "jenkins_pipeline" {
       "ecr:DescribeRepositories",
       "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload",
+      "ecr:ListImages",
       "ecr:PutImage",
       "ecr:PutLifecyclePolicy",
       "ecr:UploadLayerPart"
@@ -96,6 +108,18 @@ data "aws_iam_policy_document" "jenkins_pipeline" {
       variable = "iam:PassedToService"
       values   = ["ecs-tasks.amazonaws.com"]
     }
+  }
+
+  statement {
+    sid    = "CloudWatchLogs"
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups"
+    ]
+    resources = ["arn:aws:logs:${var.aws_region}:*:log-group:/ecs/${var.project_name}/*"]
   }
 }
 
@@ -186,4 +210,22 @@ resource "aws_instance" "jenkins" {
     aws_iam_role_policy_attachment.ssm_core,
     aws_iam_role_policy_attachment.jenkins_pipeline
   ]
+}
+
+resource "aws_secretsmanager_secret" "jenkins_ecs_roles" {
+  name        = "jenkins/${var.project_name}"
+  description = "Jenkins ECS deployment credentials for ${var.project_name}"
+
+  tags = {
+    Project                      = var.project_name
+    "jenkins:credentials:type"   = "string"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "jenkins_ecs_roles" {
+  secret_id = aws_secretsmanager_secret.jenkins_ecs_roles.id
+  secret_string = jsonencode({
+    "ecs-execution-role-arn" = var.ecs_task_role_arns[0]
+    "ecs-task-role-arn"      = var.ecs_task_role_arns[1]
+  })
 }

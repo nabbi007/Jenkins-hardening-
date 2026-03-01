@@ -1,0 +1,15 @@
+configuration-as-code:1810.v9b_c30a_249a_4c
+aws-secrets-manager-credentials-provider:2.0.3
+aws-java-sdk-minimal:1.12.633
+workflow-aggregator:596.v8c21c963d92d
+git:5.2.1
+github:1.37.3.1
+pipeline-stage-view:2.34
+docker-workflow:572.v950f58993843
+sonar:2.17.2
+htmlpublisher:1.32
+credentials-binding:642.v737c34dea_6c2
+ssh-agent:333.v878b_53c89463
+timestamper:1.26
+build-timeout:1.32
+ws-cleanup:0.45

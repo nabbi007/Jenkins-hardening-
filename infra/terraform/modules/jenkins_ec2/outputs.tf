@@ -32,3 +32,13 @@ output "role_arn" {
   description = "Jenkins IAM role ARN"
   value       = aws_iam_role.jenkins.arn
 }
+
+output "secrets_manager_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing ECS role ARNs"
+  value       = aws_secretsmanager_secret.jenkins_ecs_roles.arn
+}
+
+output "secrets_manager_secret_name" {
+  description = "Name of the Secrets Manager secret"
+  value       = aws_secretsmanager_secret.jenkins_ecs_roles.name
+}

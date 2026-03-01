@@ -86,3 +86,13 @@ output "jenkins_health_check_command" {
     module.jenkins_ec2[0].public_ip
   ) : null
 }
+
+output "jenkins_secrets_manager_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing Jenkins ECS role credentials"
+  value       = var.create_jenkins_instance ? module.jenkins_ec2[0].secrets_manager_secret_arn : null
+}
+
+output "jenkins_secrets_manager_secret_name" {
+  description = "Name of the Secrets Manager secret"
+  value       = var.create_jenkins_instance ? module.jenkins_ec2[0].secrets_manager_secret_name : null
+}
