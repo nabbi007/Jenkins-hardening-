@@ -140,28 +140,41 @@ pipeline {
         expression { return params.ENABLE_OWASP_DC }
       }
       steps {
-        dependencyCheck(
-          additionalArguments: '''--scan backend --scan frontend 
-            --disableYarnAudit 
-            --disableAssembly 
-            --disableAutoconf 
-            --disableCmake 
-            --disableJar 
-            --disablePyDist 
-            --disablePyPkg 
-            --disableRubygems 
-            --nvdApiDelay 6000''',
-          odcInstallation: 'SCA',
-          stopBuild: true
-        )
+        sh '''
+          set -euo pipefail
+          
+          DC_CACHE="/var/lib/jenkins/.owasp-dc-cache"
+          mkdir -p "$DC_CACHE" reports/security/dependency-check
+          
+          docker run --rm \
+            -v "$PWD/backend:/src/backend:ro" \
+            -v "$PWD/frontend:/src/frontend:ro" \
+            -v "$PWD/reports/security/dependency-check:/report" \
+            -v "$DC_CACHE:/usr/share/dependency-check/data" \
+            owasp/dependency-check:latest \
+            --scan /src/backend --scan /src/frontend \
+            --format HTML \
+            --project "${JOB_NAME}" \
+            --out /report \
+            --failOnCVSS ${FAIL_ON_CVSS} \
+            --disableYarnAudit \
+            --disableAssembly \
+            --disableAutoconf \
+            --disableCmake \
+            --disableJar \
+            --disablePyDist \
+            --disablePyPkg \
+            --disableRubygems
+        '''
         
-        dependencyCheckPublisher(
-          pattern: '**/dependency-check-report.xml',
-          failedTotalCritical: params.FAIL_ON_CVSS.toInteger() >= 9 ? 1 : 999,
-          failedTotalHigh: params.FAIL_ON_CVSS.toInteger() >= 7 ? 1 : 999,
-          unstableTotalCritical: 0,
-          unstableTotalHigh: 0
-        )
+        publishHTML([
+          allowMissing: false,
+          alwaysLinkToLastBuild: true,
+          keepAll: true,
+          reportDir: 'reports/security/dependency-check',
+          reportFiles: 'dependency-check-report.html',
+          reportName: 'OWASP Dependency-Check'
+        ])
       }
     }
 
