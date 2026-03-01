@@ -135,46 +135,33 @@ pipeline {
       }
     }
 
-    stage('Dependency Scanning - OWASP') {
+    stage('Dependency Scanning - npm audit') {
       when {
         expression { return params.ENABLE_OWASP_DC }
       }
-      steps {
-        sh '''
-          set -euo pipefail
-          
-          DC_CACHE="/var/lib/jenkins/.owasp-dc-cache"
-          mkdir -p "$DC_CACHE" reports/security/dependency-check
-          
-          docker run --rm \
-            -v "$PWD/backend:/src/backend:ro" \
-            -v "$PWD/frontend:/src/frontend:ro" \
-            -v "$PWD/reports/security/dependency-check:/report" \
-            -v "$DC_CACHE:/usr/share/dependency-check/data" \
-            owasp/dependency-check:latest \
-            --scan /src/backend --scan /src/frontend \
-            --format HTML \
-            --project "${JOB_NAME}" \
-            --out /report \
-            --failOnCVSS ${FAIL_ON_CVSS} \
-            --disableYarnAudit \
-            --disableAssembly \
-            --disableAutoconf \
-            --disableCmake \
-            --disableJar \
-            --disablePyDist \
-            --disablePyPkg \
-            --disableRubygems
-        '''
-        
-        publishHTML([
-          allowMissing: false,
-          alwaysLinkToLastBuild: true,
-          keepAll: true,
-          reportDir: 'reports/security/dependency-check',
-          reportFiles: 'dependency-check-report.html',
-          reportName: 'OWASP Dependency-Check'
-        ])
+      parallel {
+        stage('Backend Dependencies') {
+          steps {
+            dir('backend') {
+              sh '''
+                set -euo pipefail
+                npm audit --audit-level=high --json > ../reports/security/npm-audit-backend.json || true
+                npm audit --audit-level=high
+              '''
+            }
+          }
+        }
+        stage('Frontend Dependencies') {
+          steps {
+            dir('frontend') {
+              sh '''
+                set -euo pipefail
+                npm audit --audit-level=high --json > ../reports/security/npm-audit-frontend.json || true
+                npm audit --audit-level=high
+              '''
+            }
+          }
+        }
       }
     }
 
