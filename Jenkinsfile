@@ -40,14 +40,14 @@ pipeline {
     stage('Prepare Build Metadata') {
       steps {
         script {
-          // Validate required env vars from jenkins.yaml
-          if (!env.AWS_REGION) error('AWS_REGION not set. Ensure jenkins.yaml is loaded via JCasC.')
-          if (!env.BACKEND_ECR_REPO) error('BACKEND_ECR_REPO not set. Ensure jenkins.yaml is loaded via JCasC.')
-          if (!env.FRONTEND_ECR_REPO) error('FRONTEND_ECR_REPO not set. Ensure jenkins.yaml is loaded via JCasC.')
-          if (!env.ECS_CLUSTER_NAME) error('ECS_CLUSTER_NAME not set. Ensure jenkins.yaml is loaded via JCasC.')
-          if (!env.ECS_SERVICE_NAME) error('ECS_SERVICE_NAME not set. Ensure jenkins.yaml is loaded via JCasC.')
-          if (!env.ECS_TASK_FAMILY) error('ECS_TASK_FAMILY not set. Ensure jenkins.yaml is loaded via JCasC.')
-          if (!env.TRIVY_SEVERITIES) error('TRIVY_SEVERITIES not set. Ensure jenkins.yaml is loaded via JCasC.')
+          // Validate required env vars
+          if (!env.AWS_REGION) error('AWS_REGION not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.BACKEND_ECR_REPO) error('BACKEND_ECR_REPO not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.FRONTEND_ECR_REPO) error('FRONTEND_ECR_REPO not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.ECS_CLUSTER_NAME) error('ECS_CLUSTER_NAME not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.ECS_SERVICE_NAME) error('ECS_SERVICE_NAME not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.ECS_TASK_FAMILY) error('ECS_TASK_FAMILY not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.TRIVY_SEVERITIES) error('TRIVY_SEVERITIES not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
 
           env.GIT_SHA     = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
           env.SAFE_BRANCH = (env.BRANCH_NAME ?: 'detached').replaceAll('[^a-zA-Z0-9_.-]', '-')
