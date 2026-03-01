@@ -41,16 +41,13 @@ pipeline {
       steps {
         script {
           // Validate required env vars from jenkins.yaml
-          def requiredVars = ['AWS_REGION', 'BACKEND_ECR_REPO', 'FRONTEND_ECR_REPO', 
-                              'ECS_CLUSTER_NAME', 'ECS_SERVICE_NAME', 'ECS_TASK_FAMILY',
-                              'ECS_TASK_CPU', 'ECS_TASK_MEMORY', 'BACKEND_LOG_GROUP', 
-                              'FRONTEND_LOG_GROUP', 'TRIVY_SEVERITIES', 'ECR_LIFECYCLE_MAX_IMAGES',
-                              'ECS_TASKDEF_KEEP_REVISIONS']
-          
-          def missing = requiredVars.findAll { !env[it] }
-          if (missing) {
-            error("Missing required environment variables from jenkins.yaml: ${missing.join(', ')}. Ensure JCasC is configured properly.")
-          }
+          if (!env.AWS_REGION) error('AWS_REGION not set. Ensure jenkins.yaml is loaded via JCasC.')
+          if (!env.BACKEND_ECR_REPO) error('BACKEND_ECR_REPO not set. Ensure jenkins.yaml is loaded via JCasC.')
+          if (!env.FRONTEND_ECR_REPO) error('FRONTEND_ECR_REPO not set. Ensure jenkins.yaml is loaded via JCasC.')
+          if (!env.ECS_CLUSTER_NAME) error('ECS_CLUSTER_NAME not set. Ensure jenkins.yaml is loaded via JCasC.')
+          if (!env.ECS_SERVICE_NAME) error('ECS_SERVICE_NAME not set. Ensure jenkins.yaml is loaded via JCasC.')
+          if (!env.ECS_TASK_FAMILY) error('ECS_TASK_FAMILY not set. Ensure jenkins.yaml is loaded via JCasC.')
+          if (!env.TRIVY_SEVERITIES) error('TRIVY_SEVERITIES not set. Ensure jenkins.yaml is loaded via JCasC.')
 
           env.GIT_SHA     = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
           env.SAFE_BRANCH = (env.BRANCH_NAME ?: 'detached').replaceAll('[^a-zA-Z0-9_.-]', '-')
