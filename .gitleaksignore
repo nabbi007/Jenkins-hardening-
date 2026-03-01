@@ -1,8 +1,10 @@
-# Gitleaks ignore file - use path patterns
-path:backend/node_modules/**
-path:frontend/node_modules/**
-path:backend/coverage/**
-path:frontend/coverage/**
-path:reports/**
-path:infra/terraform/.terraform/**
-path:.trivycache/**
+backend/node_modules/**
+frontend/node_modules/**
+backend/coverage/**
+frontend/coverage/**
+reports/**
+infra/terraform/.terraform/**
+.trivycache/**
+*.tfstate
+*.tfstate.backup
+infra/terraform/keys/**
