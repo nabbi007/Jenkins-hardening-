@@ -140,38 +140,28 @@ pipeline {
         expression { return params.ENABLE_OWASP_DC }
       }
       steps {
-        sh '''
-          set -euo pipefail
-          
-          # Use build-specific data directory to avoid H2 lock conflicts
-          DC_DATA_DIR="$PWD/.owasp-dc-data-${BUILD_NUMBER}"
-          mkdir -p "$DC_DATA_DIR"
-          
-          docker run --rm \
-            -v "$PWD:/src" \
-            -v "$PWD/reports/security/dependency-check:/report" \
-            -v "$DC_DATA_DIR:/usr/share/dependency-check/data" \
-            owasp/dependency-check:latest \
-            --scan /src \
-            --format ALL \
-            --project "${JOB_NAME}-${IMAGE_TAG}" \
-            --out /report \
-            --failOnCVSS ${FAIL_ON_CVSS} \
-            --enableExperimental \
-            --disableYarnAudit
-          
-          # Cleanup build-specific data directory
-          rm -rf "$DC_DATA_DIR"
-        '''
+        dependencyCheck(
+          additionalArguments: '''--scan backend --scan frontend 
+            --disableYarnAudit 
+            --disableAssembly 
+            --disableAutoconf 
+            --disableCmake 
+            --disableJar 
+            --disablePyDist 
+            --disablePyPkg 
+            --disableRubygems 
+            --nvdApiDelay 6000''',
+          odcInstallation: 'SCA',
+          stopBuild: true
+        )
         
-        publishHTML([
-          allowMissing: false,
-          alwaysLinkToLastBuild: true,
-          keepAll: true,
-          reportDir: "${REPORT_DIR}/dependency-check",
-          reportFiles: 'dependency-check-report.html',
-          reportName: 'OWASP Dependency-Check Report'
-        ])
+        dependencyCheckPublisher(
+          pattern: '**/dependency-check-report.xml',
+          failedTotalCritical: params.FAIL_ON_CVSS.toInteger() >= 9 ? 1 : 999,
+          failedTotalHigh: params.FAIL_ON_CVSS.toInteger() >= 7 ? 1 : 999,
+          unstableTotalCritical: 0,
+          unstableTotalHigh: 0
+        )
       }
     }
 
