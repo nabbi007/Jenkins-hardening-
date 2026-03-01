@@ -28,6 +28,14 @@ pipeline {
     TASKDEF_TEMPLATE        = 'ecs/taskdef.template.json'
     BACKEND_CONTAINER_NAME  = 'backend'
     FRONTEND_CONTAINER_NAME = 'frontend'
+
+    // Defaults — override via Jenkins → Manage Jenkins → System → Global properties if needed
+    BACKEND_LOG_GROUP           = "${env.BACKEND_LOG_GROUP  ?: '/ecs/voting-app/backend'}"
+    FRONTEND_LOG_GROUP          = "${env.FRONTEND_LOG_GROUP ?: '/ecs/voting-app/frontend'}"
+    ECS_TASK_CPU                = "${env.ECS_TASK_CPU                ?: '512'}"
+    ECS_TASK_MEMORY             = "${env.ECS_TASK_MEMORY             ?: '1024'}"
+    ECR_LIFECYCLE_MAX_IMAGES    = "${env.ECR_LIFECYCLE_MAX_IMAGES    ?: '30'}"
+    ECS_TASKDEF_KEEP_REVISIONS  = "${env.ECS_TASKDEF_KEEP_REVISIONS  ?: '15'}"
   }
 
   stages {
@@ -48,10 +56,6 @@ pipeline {
           if (!env.ECS_SERVICE_NAME) error('ECS_SERVICE_NAME not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
           if (!env.ECS_TASK_FAMILY) error('ECS_TASK_FAMILY not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
           if (!env.TRIVY_SEVERITIES) error('TRIVY_SEVERITIES not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.BACKEND_LOG_GROUP) error('BACKEND_LOG_GROUP not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.FRONTEND_LOG_GROUP) error('FRONTEND_LOG_GROUP not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.ECS_TASK_CPU) error('ECS_TASK_CPU not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.ECS_TASK_MEMORY) error('ECS_TASK_MEMORY not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
 
           env.GIT_SHA     = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
           env.SAFE_BRANCH = (env.BRANCH_NAME ?: 'detached').replaceAll('[^a-zA-Z0-9_.-]', '-')
