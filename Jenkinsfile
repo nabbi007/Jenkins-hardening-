@@ -22,6 +22,20 @@ pipeline {
   }
 
   environment {
+    AWS_REGION              = "${env.AWS_REGION ?: 'eu-west-1'}"
+    BACKEND_ECR_REPO        = "${env.BACKEND_ECR_REPO ?: 'backend-service'}"
+    FRONTEND_ECR_REPO       = "${env.FRONTEND_ECR_REPO ?: 'frontend-web'}"
+    ECS_CLUSTER_NAME        = "${env.ECS_CLUSTER_NAME ?: 'voting-cluster'}"
+    ECS_SERVICE_NAME        = "${env.ECS_SERVICE_NAME ?: 'voting-app'}"
+    ECS_TASK_FAMILY         = "${env.ECS_TASK_FAMILY ?: 'voting-app'}"
+    ECS_TASK_CPU            = "${env.ECS_TASK_CPU ?: '512'}"
+    ECS_TASK_MEMORY         = "${env.ECS_TASK_MEMORY ?: '1024'}"
+    BACKEND_LOG_GROUP       = "${env.BACKEND_LOG_GROUP ?: '/ecs/voting-app/backend'}"
+    FRONTEND_LOG_GROUP      = "${env.FRONTEND_LOG_GROUP ?: '/ecs/voting-app/frontend'}"
+    TRIVY_SEVERITIES        = "${env.TRIVY_SEVERITIES ?: 'HIGH,CRITICAL'}"
+    ECR_LIFECYCLE_MAX_IMAGES = "${env.ECR_LIFECYCLE_MAX_IMAGES ?: '30'}"
+    ECS_TASKDEF_KEEP_REVISIONS = "${env.ECS_TASKDEF_KEEP_REVISIONS ?: '15'}"
+    
     REPORT_DIR              = 'reports/security'
     SBOM_DIR                = 'reports/sbom'
     ECS_REPORT_DIR          = 'reports/ecs'
