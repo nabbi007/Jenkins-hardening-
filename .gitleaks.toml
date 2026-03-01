@@ -1,0 +1,14 @@
+[allowlist]
+  description = "Ignore non-source paths"
+  paths = [
+    "backend/node_modules",
+    "frontend/node_modules",
+    "backend/coverage",
+    "frontend/coverage",
+    "reports",
+    "infra/terraform/.terraform",
+    ".trivycache",
+    '''.*\.tfstate''',
+    '''.*\.tfstate\.backup''',
+    "infra/terraform/keys",
+  ]

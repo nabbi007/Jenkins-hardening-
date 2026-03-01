@@ -143,12 +143,13 @@ pipeline {
                 -v "$PWD:/repo" \
                 zricethezav/gitleaks:v8.24.2 detect \
                 --source /repo \
-                --no-git \
+                --config /repo/.gitleaks.toml \
                 --redact \
                 --no-banner \
+                --max-target-megabytes 10 \
                 --report-format sarif \
                 --report-path /repo/reports/security/gitleaks.sarif \
-                --exit-code 0 || echo "Gitleaks found secrets - check report"
+                --exit-code 1 || echo "Gitleaks found secrets - check reports/security/gitleaks.sarif"
             '''
           }
         }
@@ -169,6 +170,7 @@ pipeline {
           steps {
             sh '''
               set -euo pipefail
+              SEVERITIES=$(echo "${TRIVY_SEVERITIES}" | tr -d ' ')
               docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v "$PWD:/work" \
@@ -176,7 +178,7 @@ pipeline {
                 -e TRIVY_CACHE_DIR=/root/.cache/trivy \
                 aquasec/trivy:0.58.1 image \
                 --scanners vuln \
-                --severity "${TRIVY_SEVERITIES}" \
+                --severity "${SEVERITIES}" \
                 --ignore-unfixed \
                 --exit-code 0 \
                 --format json \
@@ -190,7 +192,7 @@ pipeline {
                 -e TRIVY_CACHE_DIR=/root/.cache/trivy \
                 aquasec/trivy:0.58.1 image \
                 --scanners vuln \
-                --severity "${TRIVY_SEVERITIES}" \
+                --severity "${SEVERITIES}" \
                 --ignore-unfixed \
                 --exit-code 0 \
                 --format json \
@@ -206,14 +208,12 @@ pipeline {
             sh '''
               set -euo pipefail
               docker run --rm \
-                -u "$(id -u):$(id -g)" \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v "$PWD:/work" \
                 anchore/syft:v1.20.0 "${BACKEND_IMAGE_URI}" \
                 -o cyclonedx-json=/work/reports/sbom/backend.cyclonedx.json
 
               docker run --rm \
-                -u "$(id -u):$(id -g)" \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v "$PWD:/work" \
                 anchore/syft:v1.20.0 "${FRONTEND_IMAGE_URI}" \
