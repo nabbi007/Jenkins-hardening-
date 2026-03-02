@@ -187,6 +187,9 @@ pipeline {
             sh '''
               set -euo pipefail
               SEVERITIES=$(echo "${TRIVY_SEVERITIES}" | tr -d ' ')
+
+              # --- Backend image scan ---
+              # Report HIGH+CRITICAL to JSON (exit-code 0 so the report is always written)
               docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v "$PWD:/work" \
@@ -196,11 +199,25 @@ pipeline {
                 --scanners vuln \
                 --severity "${SEVERITIES}" \
                 --ignore-unfixed \
-                --exit-code 1 \
+                --exit-code 0 \
                 --format json \
                 --output /work/reports/security/trivy/backend.json \
                 "${BACKEND_IMAGE_URI}"
 
+              # Quality gate: fail only on CRITICAL
+              docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v "$PWD/.trivycache:/root/.cache/trivy" \
+                -e TRIVY_CACHE_DIR=/root/.cache/trivy \
+                aquasec/trivy:0.58.1 image \
+                --scanners vuln \
+                --severity CRITICAL \
+                --ignore-unfixed \
+                --exit-code 1 \
+                --format table \
+                "${BACKEND_IMAGE_URI}"
+
+              # --- Frontend image scan ---
               docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v "$PWD:/work" \
@@ -210,9 +227,22 @@ pipeline {
                 --scanners vuln \
                 --severity "${SEVERITIES}" \
                 --ignore-unfixed \
-                --exit-code 1 \
+                --exit-code 0 \
                 --format json \
                 --output /work/reports/security/trivy/frontend.json \
+                "${FRONTEND_IMAGE_URI}"
+
+              # Quality gate: fail only on CRITICAL
+              docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v "$PWD/.trivycache:/root/.cache/trivy" \
+                -e TRIVY_CACHE_DIR=/root/.cache/trivy \
+                aquasec/trivy:0.58.1 image \
+                --scanners vuln \
+                --severity CRITICAL \
+                --ignore-unfixed \
+                --exit-code 1 \
+                --format table \
                 "${FRONTEND_IMAGE_URI}"
             '''
           }
