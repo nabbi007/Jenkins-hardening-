@@ -120,7 +120,8 @@ data "aws_iam_policy_document" "jenkins_pipeline" {
     actions = [
       "elasticloadbalancing:DescribeTargetHealth",
       "elasticloadbalancing:DescribeTargetGroups",
-      "elasticloadbalancing:DescribeListeners"
+      "elasticloadbalancing:DescribeListeners",
+      "elasticloadbalancing:DescribeLoadBalancers"
     ]
     resources = ["*"]
   }
@@ -147,7 +148,8 @@ data "aws_iam_policy_document" "jenkins_pipeline" {
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
-      "logs:DescribeLogGroups"
+      "logs:DescribeLogGroups",
+      "logs:FilterLogEvents"
     ]
     resources = ["arn:aws:logs:${var.aws_region}:*:log-group:/ecs/${var.project_name}/*"]
   }

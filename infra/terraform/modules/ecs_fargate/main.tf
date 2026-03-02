@@ -162,9 +162,6 @@ locals {
           awslogs-stream-prefix = "ecs"
         }
       }
-      healthCheck = {
-        command = ["NONE"]
-      }
     },
     {
       name      = var.frontend_container_name
@@ -186,9 +183,6 @@ locals {
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"
         }
-      }
-      healthCheck = {
-        command = ["NONE"]
       }
     }
   ]
