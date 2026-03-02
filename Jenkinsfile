@@ -353,21 +353,27 @@ pipeline {
           set -euo pipefail
 
           # ── Render AppSpec with the new task definition ARN ──
-          APPSPEC=$(sed \
+          sed \
             -e "s|__TASK_DEF_ARN__|${NEW_TASK_DEF_ARN}|g" \
             -e "s|__FRONTEND_CONTAINER_NAME__|${FRONTEND_CONTAINER_NAME}|g" \
-            "$APPSPEC_TEMPLATE")
+            "$APPSPEC_TEMPLATE" > "$ECS_REPORT_DIR/appspec.rendered.json"
 
-          printf '%s\n' "$APPSPEC" > "$ECS_REPORT_DIR/appspec.rendered.json"
-
-          # ── Escape the JSON for the --revision payload ──
-          APPSPEC_ESCAPED=$(python3 -c "import sys,json; print(json.dumps(sys.stdin.read()))" <<< "$APPSPEC")
+          # ── Build the --revision JSON file (avoids shell quoting nightmares) ──
+          python3 -c "
+import json, sys
+appspec = open(sys.argv[1]).read()
+rev = {
+    'revisionType': 'AppSpecContent',
+    'appSpecContent': {'content': appspec}
+}
+json.dump(rev, open(sys.argv[2], 'w'))
+" "$ECS_REPORT_DIR/appspec.rendered.json" "$ECS_REPORT_DIR/revision.json"
 
           # ── Create CodeDeploy blue/green deployment ──
           DEPLOYMENT_ID=$(aws deploy create-deployment \
             --application-name  "$CODEDEPLOY_APP_NAME" \
             --deployment-group-name "$CODEDEPLOY_DG_NAME" \
-            --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":{\"content\":${APPSPEC_ESCAPED}}}" \
+            --revision "file://$ECS_REPORT_DIR/revision.json" \
             --query 'deploymentId' --output text)
 
           printf '%s\n' "$DEPLOYMENT_ID" > "$ECS_REPORT_DIR/deployment-id.txt"
