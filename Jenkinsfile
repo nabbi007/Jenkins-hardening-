@@ -19,9 +19,31 @@ pipeline {
     booleanParam(name: 'ENABLE_TRIVY',         defaultValue: true,  description: 'Run Trivy image scan')
     booleanParam(name: 'ENABLE_SBOM',          defaultValue: true,  description: 'Generate SBOM using Syft')
     booleanParam(name: 'DEPLOY_FROM_NON_MAIN', defaultValue: false, description: 'Allow deploy from non-main branches')
+    string(name: 'AWS_REGION',              defaultValue: '', description: 'AWS region (e.g., us-east-1)')
+    string(name: 'BACKEND_ECR_REPO',         defaultValue: '', description: 'ECR repo name for backend image')
+    string(name: 'FRONTEND_ECR_REPO',        defaultValue: '', description: 'ECR repo name for frontend image')
+    string(name: 'ECS_CLUSTER_NAME',         defaultValue: '', description: 'ECS cluster name')
+    string(name: 'ECS_SERVICE_NAME',         defaultValue: '', description: 'ECS service name')
+    string(name: 'ECS_TASK_FAMILY',          defaultValue: '', description: 'ECS task definition family')
+    string(name: 'TRIVY_SEVERITIES',         defaultValue: '', description: 'Trivy severities (e.g., CRITICAL,HIGH)')
+    string(name: 'BACKEND_LOG_GROUP',        defaultValue: '', description: 'Override backend log group')
+    string(name: 'FRONTEND_LOG_GROUP',       defaultValue: '', description: 'Override frontend log group')
+    string(name: 'ECS_TASK_CPU',             defaultValue: '', description: 'Task CPU units (e.g., 1024)')
+    string(name: 'ECS_TASK_MEMORY',          defaultValue: '', description: 'Task memory (e.g., 2048)')
+    string(name: 'ECR_LIFECYCLE_MAX_IMAGES', defaultValue: '', description: 'ECR lifecycle max images')
+    string(name: 'ECS_TASKDEF_KEEP_REVISIONS', defaultValue: '', description: 'Task definition revisions to keep')
+    string(name: 'CODEDEPLOY_APP_NAME',      defaultValue: '', description: 'CodeDeploy application name')
+    string(name: 'CODEDEPLOY_DG_NAME',       defaultValue: '', description: 'CodeDeploy deployment group name')
   }
 
   environment {
+    AWS_REGION         = "${params.AWS_REGION         ?: (env.AWS_REGION         ?: '')}"
+    BACKEND_ECR_REPO   = "${params.BACKEND_ECR_REPO   ?: (env.BACKEND_ECR_REPO   ?: '')}"
+    FRONTEND_ECR_REPO  = "${params.FRONTEND_ECR_REPO  ?: (env.FRONTEND_ECR_REPO  ?: '')}"
+    ECS_CLUSTER_NAME   = "${params.ECS_CLUSTER_NAME  ?: (env.ECS_CLUSTER_NAME  ?: '')}"
+    ECS_SERVICE_NAME   = "${params.ECS_SERVICE_NAME  ?: (env.ECS_SERVICE_NAME  ?: '')}"
+    ECS_TASK_FAMILY    = "${params.ECS_TASK_FAMILY   ?: (env.ECS_TASK_FAMILY   ?: '')}"
+    TRIVY_SEVERITIES   = "${params.TRIVY_SEVERITIES  ?: (env.TRIVY_SEVERITIES  ?: '')}"
     REPORT_DIR              = 'reports/security'
     SBOM_DIR                = 'reports/sbom'
     ECS_REPORT_DIR          = 'reports/ecs'
@@ -31,14 +53,14 @@ pipeline {
     APPSPEC_TEMPLATE        = 'ecs/appspec.template.json'
 
     // Defaults — override via Jenkins → Manage Jenkins → System → Global properties if needed
-    BACKEND_LOG_GROUP           = "${env.BACKEND_LOG_GROUP  ?: '/ecs/voting-app/backend'}"
-    FRONTEND_LOG_GROUP          = "${env.FRONTEND_LOG_GROUP ?: '/ecs/voting-app/frontend'}"
-    ECS_TASK_CPU                = "${(env.ECS_TASK_CPU               ?: '1024').trim()}"
-    ECS_TASK_MEMORY             = "${(env.ECS_TASK_MEMORY            ?: '2048').trim()}"
-    ECR_LIFECYCLE_MAX_IMAGES    = "${(env.ECR_LIFECYCLE_MAX_IMAGES   ?: '30').trim()}"
-    ECS_TASKDEF_KEEP_REVISIONS  = "${(env.ECS_TASKDEF_KEEP_REVISIONS ?: '15').trim()}"
-    CODEDEPLOY_APP_NAME         = "${env.CODEDEPLOY_APP_NAME  ?: 'voting-app-deploy'}"
-    CODEDEPLOY_DG_NAME          = "${env.CODEDEPLOY_DG_NAME   ?: 'voting-app-dg'}"
+    BACKEND_LOG_GROUP           = "${params.BACKEND_LOG_GROUP ?: (env.BACKEND_LOG_GROUP ?: '/ecs/voting-app/backend')}"
+    FRONTEND_LOG_GROUP          = "${params.FRONTEND_LOG_GROUP ?: (env.FRONTEND_LOG_GROUP ?: '/ecs/voting-app/frontend')}"
+    ECS_TASK_CPU                = "${((params.ECS_TASK_CPU ?: env.ECS_TASK_CPU) ?: '1024').toString().trim()}"
+    ECS_TASK_MEMORY             = "${((params.ECS_TASK_MEMORY ?: env.ECS_TASK_MEMORY) ?: '2048').toString().trim()}"
+    ECR_LIFECYCLE_MAX_IMAGES    = "${((params.ECR_LIFECYCLE_MAX_IMAGES ?: env.ECR_LIFECYCLE_MAX_IMAGES) ?: '30').toString().trim()}"
+    ECS_TASKDEF_KEEP_REVISIONS  = "${((params.ECS_TASKDEF_KEEP_REVISIONS ?: env.ECS_TASKDEF_KEEP_REVISIONS) ?: '15').toString().trim()}"
+    CODEDEPLOY_APP_NAME         = "${params.CODEDEPLOY_APP_NAME ?: (env.CODEDEPLOY_APP_NAME ?: 'voting-app-deploy')}"
+    CODEDEPLOY_DG_NAME          = "${params.CODEDEPLOY_DG_NAME ?: (env.CODEDEPLOY_DG_NAME ?: 'voting-app-dg')}"
   }
 
   stages {
