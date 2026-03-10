@@ -37,13 +37,13 @@ pipeline {
   }
 
   environment {
-    AWS_REGION         = "${params.AWS_REGION         ?: (env.AWS_REGION         ?: '')}"
-    BACKEND_ECR_REPO   = "${params.BACKEND_ECR_REPO   ?: (env.BACKEND_ECR_REPO   ?: '')}"
-    FRONTEND_ECR_REPO  = "${params.FRONTEND_ECR_REPO  ?: (env.FRONTEND_ECR_REPO  ?: '')}"
-    ECS_CLUSTER_NAME   = "${params.ECS_CLUSTER_NAME  ?: (env.ECS_CLUSTER_NAME  ?: '')}"
-    ECS_SERVICE_NAME   = "${params.ECS_SERVICE_NAME  ?: (env.ECS_SERVICE_NAME  ?: '')}"
-    ECS_TASK_FAMILY    = "${params.ECS_TASK_FAMILY   ?: (env.ECS_TASK_FAMILY   ?: '')}"
-    TRIVY_SEVERITIES   = "${params.TRIVY_SEVERITIES  ?: (env.TRIVY_SEVERITIES  ?: '')}"
+    AWS_REGION         = "${params.AWS_REGION         ?: ''}"
+    BACKEND_ECR_REPO   = "${params.BACKEND_ECR_REPO   ?: ''}"
+    FRONTEND_ECR_REPO  = "${params.FRONTEND_ECR_REPO  ?: ''}"
+    ECS_CLUSTER_NAME   = "${params.ECS_CLUSTER_NAME  ?: ''}"
+    ECS_SERVICE_NAME   = "${params.ECS_SERVICE_NAME  ?: ''}"
+    ECS_TASK_FAMILY    = "${params.ECS_TASK_FAMILY   ?: ''}"
+    TRIVY_SEVERITIES   = "${params.TRIVY_SEVERITIES  ?: ''}"
     REPORT_DIR              = 'reports/security'
     SBOM_DIR                = 'reports/sbom'
     ECS_REPORT_DIR          = 'reports/ecs'
@@ -74,13 +74,13 @@ pipeline {
       steps {
         script {
           // Validate required env vars
-          if (!env.AWS_REGION) error('AWS_REGION not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.BACKEND_ECR_REPO) error('BACKEND_ECR_REPO not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.FRONTEND_ECR_REPO) error('FRONTEND_ECR_REPO not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.ECS_CLUSTER_NAME) error('ECS_CLUSTER_NAME not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.ECS_SERVICE_NAME) error('ECS_SERVICE_NAME not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.ECS_TASK_FAMILY) error('ECS_TASK_FAMILY not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
-          if (!env.TRIVY_SEVERITIES) error('TRIVY_SEVERITIES not set. Configure in Jenkins → Manage Jenkins → System → Global properties → Environment variables.')
+          if (!env.AWS_REGION) error('AWS_REGION not set. Provide via build parameters.')
+          if (!env.BACKEND_ECR_REPO) error('BACKEND_ECR_REPO not set. Provide via build parameters.')
+          if (!env.FRONTEND_ECR_REPO) error('FRONTEND_ECR_REPO not set. Provide via build parameters.')
+          if (!env.ECS_CLUSTER_NAME) error('ECS_CLUSTER_NAME not set. Provide via build parameters.')
+          if (!env.ECS_SERVICE_NAME) error('ECS_SERVICE_NAME not set. Provide via build parameters.')
+          if (!env.ECS_TASK_FAMILY) error('ECS_TASK_FAMILY not set. Provide via build parameters.')
+          if (!env.TRIVY_SEVERITIES) error('TRIVY_SEVERITIES not set. Provide via build parameters.')
 
           env.GIT_SHA     = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
           // BRANCH_NAME is only set by Multibranch pipelines; fall back to git for regular Pipeline jobs
