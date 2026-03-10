@@ -148,6 +148,7 @@ pipeline {
                   -w /usr/src \
                   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
                   -e SONAR_TOKEN="${SONAR_AUTH_TOKEN}" \
+                  -e IMAGE_TAG="${IMAGE_TAG}" \
                   node:20-bookworm \
                   bash -lc 'set -euo pipefail; \
                     apt-get update -y >/dev/null; \
