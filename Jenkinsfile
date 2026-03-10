@@ -145,13 +145,17 @@ pipeline {
                 docker run --rm \
                   --network host \
                   -v "$PWD:/usr/src" \
+                  -w /usr/src \
                   -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
                   -e SONAR_TOKEN="${SONAR_AUTH_TOKEN}" \
-                  sonarsource/sonar-scanner-cli:5.0.1 \
-                  -Dsonar.login="${SONAR_AUTH_TOKEN}" \
-                  -Dsonar.projectVersion="${IMAGE_TAG}" \
-                  -Dsonar.qualitygate.wait=true \
-                  -Dsonar.qualitygate.timeout=600
+                  node:20-bookworm \
+                  bash -lc 'npm -g --silent i sonar-scanner && \
+                    sonar-scanner \
+                      -Dsonar.host.url="$SONAR_HOST_URL" \
+                      -Dsonar.token="$SONAR_TOKEN" \
+                      -Dsonar.projectVersion="$IMAGE_TAG" \
+                      -Dsonar.qualitygate.wait=true \
+                      -Dsonar.qualitygate.timeout=600'
               '''
             }
           }
